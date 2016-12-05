@@ -195,10 +195,8 @@ function connectws() {
                 message = rjson.message;
                 if (rjson.success) {
                     switch (rjson.action) {
-                    case "received":
-                        if (rjson.lid in sentLinksBylid) {
-                            sentLinksBylid[rjson.lid].received = true
-                        }
+                    case "deleted":
+                    case "sent":
                         break
                     case "data":
                         gotdata = true
