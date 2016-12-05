@@ -1,0 +1,69 @@
+<!doctype html>
+<!--
+ This page is shown when the extension button is clicked, because the
+ "browser_action" field in manifest.json contains the "default_popup" key with
+ value "popup.html".
+ -->
+<html>
+
+<head>
+    <title>Click Lists's Popup</title>
+
+    <link rel="stylesheet" type="text/css" href="./fonts/font-awesome/css/font-awesome.css" />
+    <script src="./js/jquery-2.2.4.min.js"></script>
+    <link rel="stylesheet" href="./css/jquery-ui.css">
+    <script src="./js/jquery-ui.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="popup.css" />
+    <script src="popup.js"></script>
+</head>
+
+<body>
+    <div id="wrapper">
+        <div id="btns">
+            <button type="button" id="send"><i class="fa fa-paper-plane"></i> SEND</button>
+            <!--            <button type="buton" id="refresh"><i class="fa fa-refresh"></i> REFRESH</button>-->
+        </div>
+        <div id="email-form">
+            <form autocomplete="off">
+                <input class="ui-widget" type="text" id="emailinput" placeholder="EMAIL? (Type for suggestions)" />
+                <input id="emailsubmti" type="submit" value="submit" />
+            </form>
+        </div>
+    </div>
+    <div id="links">
+        <div id="tab">
+            <span id="tab-favicon">
+                <img src=""/>
+            </span>
+            <span id="tab-title">
+            </span>
+            <span id="tab-url"></span>
+        </div>
+        <span id="message"></span>
+        <div id="links-tab">
+            <span class="links-tab-header received selected">Received</span>
+            <span class="links-tab-header sent">Sent</span>
+        </div>
+        <div id="links-wrapper">
+            <div class="lw-received">
+                <div class="link">
+                    <span class="link-simg-wrapper">
+                    <span class="initial"></span>
+                    <img class="link-simg" />
+                    </span>
+
+                    <div class="link-detail">
+                        <p class="link-sender">shristiparmanandka@gmail.com</p>
+                        <p class="link-url">http://www.facebook.com</p>
+                    </div>
+                    <span class="link-extra"><i class="fa fa-check received"></i> <i class="fa fa-eye opened"></i></span>
+                    <span class="link-delete"><i class="fa fa-trash-o"></i></span>
+                </div>
+            </div>
+            <div class="lw-sent hide"></div>
+        </div>
+    </div>
+</body>
+
+</html>

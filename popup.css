@@ -1,0 +1,334 @@
+/* latin */
+
+@font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Montserrat-Regular'), url("./fonts/Montserrat400.woff2") format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+
+
+/* latin */
+
+@font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 700;
+    src: local('Montserrat-Bold'), url("./fonts/Montserrat700.woff2") format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+
+body {
+    /*    font-family: "Segoe UI", "Lucida Grande", Tahoma, sans-serif;*/
+    font-family: "Montserrat", sans-serif;
+    color: #565656;
+    font-size: 12pt;
+    width: 550px;
+    padding-top: 10px;
+}
+
+a,
+a:link {
+    text-decoration: none;
+    color: inherit;
+}
+
+#wrapper {
+    width: 1100px;
+    height: 2em;
+    overflow: hidden;
+}
+
+#btns {
+    text-align: center;
+    width: 550px;
+    display: inline-block;
+    float: left;
+    transition: 0.3s;
+    overflow: hidden;
+}
+
+#btns.invisible {
+    visibility: hidden;
+    width: 0px;
+}
+
+#btns button {
+    cursor: pointer;
+    display: inline-block;
+    background: dodgerblue;
+    padding: 5px 15px;
+    border-radius: 4px;
+    border-width: 0px;
+    color: white;
+    font-family: inherit;
+    font-weight: bold;
+    letter-spacing: 3px;
+    transition: 0.2s;
+}
+
+#btns button i {
+    margin: 5px;
+}
+
+#email-form {
+    overflow: hidden;
+    /*    height: 0px;*/
+    padding: 0px 10px;
+    box-sizing: border-box;
+    width: 550px;
+    float: left;
+    display: inline-block;
+}
+
+#email-form form {
+    /*
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0;
+*/
+    width: 100%;
+}
+
+#email-form form input {
+    font-family: inherit;
+    font-size: 0.8em;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 0.5em 1em;
+    border-width: 0px;
+    border-bottom: 2px solid #83c2ff;
+    outline: none;
+}
+
+#email-form form input[type="submit"] {
+    display: none;
+}
+
+#links-tab {
+    padding: 5px;
+    margin: 5px 0px;
+    box-shadow: 0px 7px 5px -5px rgba(0, 0, 0, 0.2);
+}
+
+.links-tab-header {
+    cursor: pointer;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    /*    border-bottom: 2px solid gray;*/
+    padding: 5px 10px;
+    transition: 0.2s;
+    border-bottom: 4px solid transparent;
+}
+
+.links-tab-header:hover {
+    border-bottom: 4px solid dodgerblue;
+}
+
+.links-tab-header.selected {
+    border-bottom: 4px solid dodgerblue;
+}
+
+#links-wrapper {
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.lw-received,
+.lw-sent {
+    max-height: 200px;
+    overflow-y: auto;
+    transition: 0.3s;
+    opacity: 1;
+}
+.lw-sent {
+    position: relative;
+    top: 0;
+    left: 0;
+    width: 100%;
+}
+
+.lw-received.hide {
+    opacity: 0;
+    display: none;
+}
+.lw-sent.hide {
+    opacity: 0;
+    display: none;
+}
+
+.link {
+    /*    background-color: #f3f3f3; */
+    width: 100%;
+    height: 30px;
+    display: inline-block;
+    /* border-radius: 25px; */
+    /* margin: 10px 0px; */
+    padding: 10px 0px;
+    position: relative;
+    transition: 0.2s;
+}
+
+.link:hover {
+    box-shadow: 0px 20px 20px -20px rgba(0, 0, 0, 0.6);
+}
+
+.link:not(:last-child) {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.link::after {
+    visibility: hidden;
+    padding: 10px 0px;
+    line-height: 30px;
+    content: "DELETING";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.7);
+    color: gray;
+}
+
+.link.deleting::after {
+    visibility: visible;
+}
+
+.link-simg-wrapper {
+    background-color: dodgerblue;
+    color: white;
+}
+
+.link-simg-wrapper,
+.link-simg {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-block;
+    float: left;
+    position: relative;
+}
+
+.link-simg {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.initial {
+    line-height: 30px;
+}
+
+.link-detail {
+    width: calc(80% - 30px);
+    height: 100%;
+    display: inline-block;
+    float: left;
+    font-size: 10pt;
+}
+
+p {
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    padding-left: 20px;
+}
+
+.link-sender,
+.link-url {
+    height: 30px;
+    line-height: 30px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 0.9em;
+    font-weight: 400;
+    /*    padding: 5px;*/
+}
+
+.link-sender {
+    display: none;
+    color: #0080a0;
+    font-size: 1em;
+}
+
+.link-extra {
+    display: inline-block;
+    float: left;
+    width: 15%;
+    height: 30px;
+    line-height: 30px;
+    color: rgba(0, 0, 0, 0.3);
+    box-sizing: border-box;
+    padding-right: 5px;
+    text-align: right;
+}
+
+.link-extra i.yes {
+    color: yellowgreen;
+}
+
+.link-delete {
+    display: inline-block;
+    width: 5%;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 25px;
+    color: crimson;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.link-delete:hover {
+    /*    color: white;*/
+    background: rgba(220, 20, 60, 0.3);
+}
+
+#tab {
+    display: inline-block;
+    width: 100%;
+    margin: 1em 0em;
+    font-size: 0.8em;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 2px solid gainsboro;
+}
+
+#tab-favicon,
+#tab-title,
+#tab-url {
+    display: inline-block;
+    text-overflow: ellipsis;
+    float: left;
+    overflow: hidden;
+    white-space: nowrap;
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+#tab-favicon {
+    width: 10%;
+    padding: 0;
+    /*    background: #83c2ff;*/
+}
+
+#tab-favicon img {
+    width: 32px;
+    height: 32px;
+}
+
+#tab-title {
+    width: 30%;
+    /*    background: #83c2ff;*/
+    font-weight: bold;
+}
+
+#tab-url {
+    width: 60%;
+    background: gainsboro;
+}
