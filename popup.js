@@ -346,7 +346,7 @@ function sendlinkto(receiver) {
                 data: data
             });
 
-            addtoRetryList(data)
+            //addtoRetryList(data)
         });
     });
 }
