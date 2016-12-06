@@ -156,7 +156,8 @@ function getUser(callback) {
             showMessage("Please Sign in to Chrome");
         } else {
             useremail = email;
-            callback(email, id);
+            if(callback)
+                callback(email, id);
         }
     });
 }
@@ -169,11 +170,6 @@ function connectws() {
     wsconnecting = true
     write("trying to connectws...")
     getUser(function (email, id) {
-        if (email == "") {
-            //showMessage("Please Sign in to Chrome");
-            return;
-        }
-
         try {
             ws = new WebSocket(URL_WS, 'echo-protocol');
             write('Connecting... (readyState ' + ws.readyState + ')');
@@ -230,18 +226,16 @@ function connectws() {
 connectws()
 
 var contact = {};
-var quickContacts = {};
-var quickContactsEmails = [];
+var quickContacts = [];
 var maxContact = 5;
 
 function addToQuickContact(email) {
-    quickContactsEmails.remove(email)
-    if (quickContactsEmails.length > maxContact) {
-        quickContactsEmails.splice(0, 1)
+    quickContacts.remove(email)
+    if (quickContacts.length > maxContact) {
+        quickContacts.splice(0, 1)
     }
 
-    quickContactsEmails.push(email)
-    quickContacts[email] = contact[email]
+    quickContacts.push(email)
 }
 
 function updatePopup() {

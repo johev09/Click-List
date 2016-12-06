@@ -12,7 +12,8 @@ var tabtitle,
 var $linkswrapper = null,
     $link = null;
 
-var $emailform,
+var $wrapper,
+    $emailform,
     $emailinput,
     $emailsubmit,
     $received,
@@ -21,6 +22,8 @@ var $emailform,
     $btns,
     ajaxtimeout,
     toms = 200;
+
+var $quickContacts;
 
 document.addEventListener('DOMContentLoaded', function () {
     //console.log(chrome.extension);
@@ -54,8 +57,9 @@ document.addEventListener('DOMContentLoaded', function () {
     //    var refreshbtn = document.getElementById("refresh");
     //    refreshbtn.onclick = refresh;
 
-    $btns = $("#btns");
-    $emailform = $("#email-form");
+    $wrapper = $("#wrapper");
+    $btns = $wrapper.children("#btns");
+    $emailform = $wrapper.children("#email-form");
     $emailform.submit(function (ev) {
         var receiver = $emailinput.val().trim()
         submitForm(receiver)
@@ -82,9 +86,37 @@ document.addEventListener('DOMContentLoaded', function () {
     $link.remove();
 
     setTimeout(filldata);
+
+    $quickContacts = $("#quick-contacts")
+    setTimeout(initQuickContacts);
 });
 
+function initQuickContacts() {
+    bg.getAuthToken(function (token) {
+        $quickContacts.html("")
+        for (var i = bg.quickContacts.length - 1; i >= 0; --i) {
+            var linksimgwrapper = $('<span class="link-simg-wrapper">\
+                        <span class="initial"></span>\
+                        <img class="link-simg" />\
+                    </span>'),
+                initial = linksimgwrapper.children(".initial"),
+                linksimg = linksimgwrapper.children(".link-simg")
+
+            var email = bg.quickContacts[i]
+            setUserImage(token, email, initial, linksimg, linksimgwrapper)
+            linksimgwrapper.click(function () {
+                sendlinkto(email)
+            })
+
+            $quickContacts.append(linksimgwrapper)
+        }
+    })
+}
+
 function changetab() {
+    if ($(this).hasClass("selected"))
+        return
+
     $received.toggleClass("selected")
     $sent.toggleClass("selected")
     $lwReceived.toggleClass("hide")
@@ -162,6 +194,9 @@ function emailkeyup(ev) {
     }, toms);
 }
 
+var sent = 0,
+    received = 0;
+
 function filldata() {
     if (bg.gotdata) {
         bg.getAuthToken(function (token) {
@@ -171,9 +206,14 @@ function filldata() {
             $lwReceived.children().remove();
             $lwSent.children().remove();
 
+            received = 0
+            sent = 0
             data.forEach(function (row, i) {
                 addtoList(token, row, i)
             })
+
+            $received.text("Received (" + received + ")")
+            $sent.text("Sent (" + sent + ")")
         })
     } else {
         console.log("data err", bg.data);
@@ -194,16 +234,7 @@ function addtoList(token, row, i) {
         $linkopened = $linkextra.children(".opened")
 
     if (row.sender in bg.contact) {
-        var contact = bg.contact[row.sender],
-            src = contact.src + "&access_token=" + token,
-            name = ("name" in contact && contact.name != "") ? contact.name + "(" + row.sender + ")" : row.sender;
-
-        $initial.text(name[0].toUpperCase())
-
-        $linksimg
-            .attr("src", src)
-            .attr("title", name);
-        $linksimgwrapper.css("background-color", contact.color)
+        setUserImage(token, row.sender, $initial, $linksimg, $linksimgwrapper)
     } else {
         $initial.text(row.sender[0].toUpperCase())
         $linksimg.remove();
@@ -243,14 +274,7 @@ function addtoList(token, row, i) {
                     $nlinksentImg = $nlinksentImgWrapper.children(".link-simg"),
                     $nlinksentInitial = $nlinksentImgWrapper.children(".initial")
 
-                var contact = bg.contact[row.receiver],
-                    src = contact.src + "&access_token=" + token,
-                    name = ("name" in contact && contact.name != "") ? contact.name + "(" + row.sender + ")" : row.sender;
-                $nlinksentInitial.text(name[0].toUpperCase())
-                $nlinksentImg
-                    .attr("src", src)
-                    .attr("title", name);
-                $nlinksentImgWrapper.css("background-color", contact.color)
+                setUserImage(token, row.receiver, $nlinksentInitial, $nlinksentImg, $nlinksentImgWrapper)
             }
 
             $nlinksent.children(".link-delete").remove()
@@ -261,6 +285,8 @@ function addtoList(token, row, i) {
                 $nlinksentExtra.children(".opened").addClass("yes")
 
             $lwSent.append($nlinksent);
+
+            ++sent;
         }
 
         //========RECEIVED LIST
@@ -269,10 +295,25 @@ function addtoList(token, row, i) {
             if ("opened" in row && row.opened)
                 $linkopened.addClass("yes")
             $lwReceived.append($nlink);
+
+            ++received;
         }
     }
 
     return $nlink
+}
+
+function setUserImage(token, email, $initial, $linksimg, $linksimgwrapper) {
+    if (!(email in bg.contact))
+        return
+
+    var contact = bg.contact[email],
+        src = contact.src + "&access_token=" + token,
+        name = ("name" in contact && contact.name != "") ? contact.name + " (" + email + ")" : email;
+
+    $initial.text(name[0].toUpperCase())
+    $linksimg.attr("src", src).attr("title", name);
+    $linksimgwrapper.css("background-color", contact.color)
 }
 
 function addtoRetryList(data) {
@@ -349,6 +390,8 @@ function sendlinkto(receiver) {
             //addtoRetryList(data)
         });
     });
+    bg.addToQuickContact(receiver)
+    initQuickContacts()
 }
 
 function getRandom() {
@@ -361,8 +404,10 @@ function send() {
 
     $emailsubmit.removeAttr("disabled")
 
-    $btns.addClass("invisible");
+    //$btns.addClass("invisible");
+
     //$emailinput.focus();
+    $wrapper.addClass("send");
     setTimeout(function () {
         $emailinput.focus();
     }, 300);
@@ -378,7 +423,8 @@ function submitForm(receiver) {
 }
 
 function closeEmail() {
-    $btns.removeClass("invisible")
+    //$btns.removeClass("invisible")
+    $wrapper.removeClass("send")
     $emailform.attr("disabled", true)
     $emailsubmit.attr("disabled", true)
     $(".ui-menu-item").hide()
