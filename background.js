@@ -31,14 +31,27 @@ function getData(cb) {
     })
 }
 
-chrome.notifications.onButtonClicked.addListener(function (notifid, btnIndex) {
+function notifLinkOpen(lid) {
+    window.open(receivedLinksBylid[lid].link)
+    linkOpened(lid)
+}
+chrome.notifications.onClicked.addListener(function (notifid) {
     chrome.notifications.clear(notifid)
     if (notifid in notifications) {
-        if (btnIndex === 0) {
-            linkOpened(notifications[notifid])
-        } else if (btnIndex === 1) {}
+        notifLinkOpen(notifications[notifid])
     }
+    delete notifications[notifid]
 });
+chrome.notifications.onButtonClicked.addListener(function (notifid, btnIndex) {
+    chrome.notifications.clear(notifid)
+    if (btnIndex === 0 && notifid in notifications) {
+        notifLinkOpen(notifications[notifid])
+    }
+    delete notifications[notifid]
+});
+chrome.notifications.onClosed.addListener(function (notifid, byuser) {
+    delete notifications[notifid]
+})
 
 function linkOpened(lid) {
     console.log(lid)
@@ -81,37 +94,38 @@ function saveData() {
             text: "" + (data.length - lastcount)
         });
 
-        getAuthToken(function (token) {
-            notifications = {}
-            new_links.forEach(function (link) {
-                var title = "Unknown (" + link.sender + ")",
-                    message = link.title,
-                    iconUrl = ""
+        if (new_links.length) {
+            getAuthToken(function (token) {
+                new_links.forEach(function (link) {
+                    var title = "Unknown (" + link.sender + ")",
+                        message = link.title,
+                        iconUrl = ""
 
-                if (link.sender in contact) {
-                    var sender = contact[link.sender]
-                    title = sender.name
-                    iconUrl = sender.src + "&access_token=" + token
-                }
+                    if (link.sender in contact) {
+                        var sender = contact[link.sender]
+                        title = sender.name
+                        iconUrl = sender.src + "&access_token=" + token
+                    }
 
-                chrome.notifications.create(null, {
-                    type: "basic",
-                    title: title,
-                    message: message,
-                    contextMessage: link.link,
-                    iconUrl: iconUrl,
-                    buttons: [{
-                        title: "Check Link",
-                        iconUrl: "happy.png"
+                    chrome.notifications.create(null, {
+                        type: "basic",
+                        title: title,
+                        message: message,
+                        contextMessage: link.link,
+                        iconUrl: iconUrl,
+                        buttons: [{
+                            title: "Check Link",
+                            iconUrl: "happy.png"
                     }, {
-                        title: "Later...",
-                        iconUrl: "bored.png"
+                            title: "Later...",
+                            iconUrl: "bored.png"
                     }]
-                }, function (id) {
-                    notifications[id] = link.lid
+                    }, function (id) {
+                        notifications[id] = link.lid
+                    })
                 })
             })
-        })
+        }
     }
 
     // Save it using the Chrome extension storage API.
@@ -156,7 +170,7 @@ function getUser(callback) {
             showMessage("Please Sign in to Chrome");
         } else {
             useremail = email;
-            if(callback)
+            if (callback)
                 callback(email, id);
         }
     });
