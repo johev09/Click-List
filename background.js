@@ -18,18 +18,180 @@ var useremail;
 
 var sentLinksBylid = {},
     receivedLinksBylid = {};
-//var SERVER_URL = "http://click-list.esy.es/?";
+
+var defaultsrc = "envelope.png";
+var chime = new Audio('chime.mp3')
 
 var URL_WS = 'ws://52.33.207.145:5001';
 //var URL_WS = 'ws://localhost:5001';
 
+function getAllContacts() {
+    write("trying to get all contacts...")
+    getAuthToken(function (token) {
+        console.log(token);
+
+        //var url = 'https://www.google.com/m8/feeds/contacts/default/thin?alt=json&max-results=10&orderby=lastmodified&sortorder=descending';
+        var url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&max-results=999";
+        url += "&v=3.0";
+        //url +="&orderby=lastmodified&sortorder=descending";
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.onload = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                //console.log(xhr.responseText);
+                var json = JSON.parse(xhr.responseText);
+                var entries = json.feed.entry;
+                entries.forEach(function (entry) {
+                    if (entry.hasOwnProperty("gd$email")) {
+                        var email = entry.gd$email[0].address,
+                            name = "",
+                            src = "";
+                        if (entry.hasOwnProperty("gd$name")) {
+                            name = entry.gd$name.gd$fullName.$t;
+                        }
+                        var links = entry.link;
+                        links.some(function (link) {
+                            if (link.type == "image/*") {
+                                if (link.hasOwnProperty("gd$etag"))
+                                    src = link.href; // + "&access_token=" + token;
+                                return true;
+                            }
+                            return false;
+                        });
+
+                        contact[email] = {
+                            name: name,
+                            src: src,
+                            color: "dodgerblue" //colors.getRandom()
+                        };
+                    }
+                });
+
+                console.log(contact);
+            }
+        }
+        xhr.onerror = function (err) {
+            console.error("xhr err", err);
+            setTimeout(getAllContacts, 1000)
+        }
+        xhr.send();
+    })
+}
+getAllContacts()
+
 function getData(cb) {
+    if (!cb)
+        return
     chrome.storage.local.get("data", function (items) {
         console.log(items);
-        if (cb && "data" in items)
+        if ("data" in items)
             cb(items.data)
     })
 }
+
+function getQuickContacts(cb) {
+    if (!cb)
+        return
+    chrome.storage.local.get("quickcontacts", function (items) {
+        if ("quickcontacts" in items)
+            cb(items.quickcontacts)
+    })
+}
+
+function saveData() {
+    // checking for new links
+    var new_links = [],
+        new_data_lids = new Set();
+    data.forEach(function (link, i) {
+        if (useremail && link.sender == useremail) {
+            sentLinksBylid[link.lid] = data[i]
+        }
+        if (useremail && link.receiver == useremail) {
+            receivedLinksBylid[link.lid] = data[i]
+        }
+
+        if (!data_lids.has(link.lid)) {
+            new_links.push(link)
+        }
+        new_data_lids.add(link.lid)
+    })
+    data_lids = new_data_lids
+
+    if (data.length > lastcount) {
+        chrome.browserAction.setBadgeText({
+            text: "" + (data.length - lastcount)
+        });
+
+        if (new_links.length) {
+            getAuthToken(function (token) {
+                new_links.forEach(function (link) {
+                    var title = "Unknown (" + link.sender + ")",
+                        message = link.title,
+                        iconUrl = ""
+
+                    if (link.sender in contact) {
+                        var sender = contact[link.sender]
+                        title = sender.name
+                        iconUrl = sender.src + "&access_token=" + token
+                    } else {
+                        return
+                    }
+
+                    chrome.notifications.create(null, {
+                        type: "basic",
+                        title: title,
+                        message: message,
+                        contextMessage: link.link,
+                        iconUrl: iconUrl,
+                        buttons: [{
+                            title: "Check Link",
+                            iconUrl: "happy.png"
+                    }, {
+                            title: "Later...",
+                            iconUrl: "bored.png"
+                    }]
+                    }, function (id) {
+                        notifications[id] = link.lid
+                        chime.play()
+                    })
+                })
+            })
+        }
+    }
+
+    // Save it using the Chrome extension storage API.
+    chrome.storage.local.set({
+        'data': data
+    }, function () {
+        // Notify that we saved.
+        console.log('Settings saved');
+    });
+}
+
+function saveQuickContacts(cb) {
+    chrome.storage.local.set({
+        'quickcontacts': quickContacts
+    }, function () {
+        // Notify that we saved.
+        console.log('Quick Contacts saved');
+    });
+}
+
+getData(function (localdata) {
+    data = localdata
+    lastcount = data.length
+    // data from storage is cached so keeping lids in old data_lids Set
+    data.forEach(function (link, i) {
+        data_lids.add(link.lid)
+    })
+    
+    saveData()
+})
+getQuickContacts(function (qcontacts) {
+    quickContacts = qcontacts
+})
 
 function notifLinkOpen(lid) {
     window.open(receivedLinksBylid[lid].link)
@@ -70,79 +232,6 @@ function linkOpened(lid) {
 var data_lids = new Set();
 var notifications = {};
 
-function saveData() {
-    // checking for new links
-    var new_links = [],
-        new_data_lids = new Set();
-    data.forEach(function (link, i) {
-        if (useremail && link.sender == useremail) {
-            sentLinksBylid[link.lid] = data[i]
-        }
-        if (useremail && link.receiver == useremail) {
-            receivedLinksBylid[link.lid] = data[i]
-        }
-
-        if (!data_lids.has(link.lid)) {
-            new_links.push(link)
-        }
-        new_data_lids.add(link.lid)
-    })
-    data_lids = new_data_lids
-
-    if (data.length > lastcount) {
-        chrome.browserAction.setBadgeText({
-            text: "" + (data.length - lastcount)
-        });
-
-        if (new_links.length) {
-            getAuthToken(function (token) {
-                new_links.forEach(function (link) {
-                    var title = "Unknown (" + link.sender + ")",
-                        message = link.title,
-                        iconUrl = ""
-
-                    if (link.sender in contact) {
-                        var sender = contact[link.sender]
-                        title = sender.name
-                        iconUrl = sender.src + "&access_token=" + token
-                    }
-
-                    chrome.notifications.create(null, {
-                        type: "basic",
-                        title: title,
-                        message: message,
-                        contextMessage: link.link,
-                        iconUrl: iconUrl,
-                        buttons: [{
-                            title: "Check Link",
-                            iconUrl: "happy.png"
-                    }, {
-                            title: "Later...",
-                            iconUrl: "bored.png"
-                    }]
-                    }, function (id) {
-                        notifications[id] = link.lid
-                    })
-                })
-            })
-        }
-    }
-
-    // Save it using the Chrome extension storage API.
-    chrome.storage.local.set({
-        'data': data
-    }, function () {
-        // Notify that we saved.
-        console.log('Settings saved');
-    });
-}
-
-getData(function (localdata) {
-    data = localdata
-    lastcount = data.length
-    saveData()
-})
-
 function write(text) {
     console.log(text);
 }
@@ -167,7 +256,7 @@ function getUser(callback) {
             id = userInfo.id;
 
         if (email == "") {
-            showMessage("Please Sign in to Chrome");
+            console.log("Please Sign in to Chrome...");
         } else {
             useremail = email;
             if (callback)
@@ -184,57 +273,53 @@ function connectws() {
     wsconnecting = true
     write("trying to connectws...")
     getUser(function (email, id) {
-        try {
-            ws = new WebSocket(URL_WS, 'echo-protocol');
-            write('Connecting... (readyState ' + ws.readyState + ')');
-            ws.onopen = function (msg) {
-                write('Connection successfully opened (readyState ' + this.readyState + ')');
-                send({
-                    type: "email",
-                    data: email
-                });
-                wsconnecting = false
-                wsclosed = false
-            };
-            ws.onmessage = function (msg) {
-                //write('Server says: ' + msg.data);
+        ws = new WebSocket(URL_WS, 'echo-protocol');
+        write('Connecting... (readyState ' + ws.readyState + ')');
+        ws.onopen = function (msg) {
+            write('Connection successfully opened (readyState ' + this.readyState + ')');
+            send({
+                type: "email",
+                data: email
+            });
+            wsconnecting = false
+            wsclosed = false
+        };
+        ws.onmessage = function (msg) {
+            //write('Server says: ' + msg.data);
 
-                var rjson = JSON.parse(msg.data);
-                console.log(rjson);
+            var rjson = JSON.parse(msg.data);
+            console.log(rjson);
 
-                message = rjson.message;
-                if (rjson.success) {
-                    switch (rjson.action) {
-                    case "deleted":
-                    case "sent":
-                        break
-                    case "data":
-                        gotdata = true
-                        data = rjson.data
+            message = rjson.message;
+            if (rjson.success) {
+                switch (rjson.action) {
+                case "deleted":
+                case "sent":
+                    break
+                case "data":
+                    gotdata = true
+                    data = rjson.data
 
-                        updatePopup()
-                        saveData()
-                    }
+                    updatePopup()
+                    saveData()
                 }
-            };
-            ws.onclose = function (msg) {
-                if (this.readyState == 2)
-                    write('Closing... The connection is going throught the closing handshake (readyState ' + this.readyState + ')');
-                else if (this.readyState == 3) {
-                    setTimeout(connectws, 1000)
-                    write('Connection closed... The connection has been closed or could not be opened (readyState ' + this.readyState + ')');
-                } else {
-                    setTimeout(connectws, 1000)
-                    write('Connection closed... (unhandled readyState ' + this.readyState + ')');
-                }
-                wsclosed = true
-            };
-            ws.onerror = function (event) {
-                write("error: " + event.data);
-            };
-        } catch (exception) {
-            write(exception);
-        }
+            }
+        };
+        ws.onclose = function (msg) {
+            if (this.readyState == 2)
+                write('Closing... The connection is going throught the closing handshake (readyState ' + this.readyState + ')');
+            else if (this.readyState == 3) {
+                setTimeout(connectws, 1000)
+                write('Connection closed... The connection has been closed or could not be opened (readyState ' + this.readyState + ')');
+            } else {
+                setTimeout(connectws, 1000)
+                write('Connection closed... (unhandled readyState ' + this.readyState + ')');
+            }
+            wsclosed = true
+        };
+        ws.onerror = function (event) {
+            console.error(event.data);
+        };
     })
 }
 connectws()
@@ -250,6 +335,7 @@ function addToQuickContact(email) {
     }
 
     quickContacts.push(email)
+    saveQuickContacts()
 }
 
 function updatePopup() {
@@ -276,66 +362,6 @@ Array.prototype.remove = function (val) {
         this.splice(i, 1)
     return this
 }
-
-function getAllContacts() {
-    write("trying to get all contacts...")
-    try {
-        getAuthToken(function (token) {
-            console.log(token);
-
-            //var url = 'https://www.google.com/m8/feeds/contacts/default/thin?alt=json&max-results=10&orderby=lastmodified&sortorder=descending';
-            var url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&max-results=999";
-            url += "&v=3.0";
-            //url +="&orderby=lastmodified&sortorder=descending";
-
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', url);
-            xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-            xhr.onload = function () {
-                if (xhr.readyState == 4 && xhr.status == 200) {
-                    //console.log(xhr.responseText);
-                    var json = JSON.parse(xhr.responseText);
-                    var entries = json.feed.entry;
-                    entries.forEach(function (entry) {
-                        if (entry.hasOwnProperty("gd$email")) {
-                            var email = entry.gd$email[0].address,
-                                name = "",
-                                src = "envelope.png";
-                            if (entry.hasOwnProperty("gd$name")) {
-                                name = entry.gd$name.gd$fullName.$t;
-                            }
-                            var links = entry.link;
-                            links.some(function (link) {
-                                if (link.type == "image/*") {
-                                    if (link.hasOwnProperty("gd$etag"))
-                                        src = link.href; // + "&access_token=" + token;
-                                    return true;
-                                }
-                                return false;
-                            });
-
-                            contact[email] = {
-                                name: name,
-                                src: src,
-                                color: "dodgerblue" //colors.getRandom()
-                            };
-                        }
-                    });
-
-                    console.log(contact);
-                }
-            }
-            xhr.onerror = function (err) {
-                console.error("xhr err", err);
-                setTimeout(getAllContacts, 1000)
-            }
-            xhr.send();
-        })
-    } catch (err) {
-        setTimeout(getAllContacts, 1000)
-    }
-}
-getAllContacts()
 
 function isOnline() {
     if (!navigator.onLine && !wsclosed) {

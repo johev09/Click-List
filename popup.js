@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
 function initQuickContacts() {
     bg.getAuthToken(function (token) {
         $quickContacts.html("")
-        for (var i = bg.quickContacts.length - 1; i >= 0; --i) {
+        for (var i = 0; i < bg.quickContacts.length; ++i) {
             var linksimgwrapper = $('<span class="link-simg-wrapper">\
                         <span class="initial"></span>\
                         <img class="link-simg" />\
@@ -104,13 +104,21 @@ function initQuickContacts() {
 
             var email = bg.quickContacts[i]
             setUserImage(token, email, initial, linksimg, linksimgwrapper)
-            linksimgwrapper.click(function () {
-                sendlinkto(email)
-            })
+            linksimgwrapper.data("email", email)
+            linksimgwrapper.click(quickContactsClick)
 
             $quickContacts.append(linksimgwrapper)
         }
     })
+}
+
+function quickContactsClick(ev) {
+    ev.preventDefault()
+    var self = $(this)
+    self.removeClass("active")
+    self.addClass("active")
+    setTimeout(sendlinkto.bind(this,self.data("email")), 500)
+    return false;
 }
 
 function changetab() {
@@ -233,13 +241,7 @@ function addtoList(token, row, i) {
         $linkreceived = $linkextra.children(".received"),
         $linkopened = $linkextra.children(".opened")
 
-    if (row.sender in bg.contact) {
-        setUserImage(token, row.sender, $initial, $linksimg, $linksimgwrapper)
-    } else {
-        $initial.text(row.sender[0].toUpperCase())
-        $linksimg.remove();
-    }
-    $linksimgwrapper.attr("title", row.sender)
+    setUserImage(token, row.sender, $initial, $linksimg, $linksimgwrapper)
 
     var a = $("<a>", {
         target: "_blank",
@@ -266,16 +268,14 @@ function addtoList(token, row, i) {
     if (bg.useremail) {
         //========SENT LIST
         if (row.sender == bg.useremail) {
-            var $nlinksent = $nlink.clone(true, true);
+            var $nlinksent = $nlink.clone(true, true)
 
-            if (row.receiver in bg.contact) {
-                //img of receiver
-                var $nlinksentImgWrapper = $nlinksent.children(".link-simg-wrapper"),
-                    $nlinksentImg = $nlinksentImgWrapper.children(".link-simg"),
-                    $nlinksentInitial = $nlinksentImgWrapper.children(".initial")
+            //img of receiver
+            var $nlinksentImgWrapper = $nlinksent.children(".link-simg-wrapper"),
+                $nlinksentImg = $nlinksentImgWrapper.children(".link-simg"),
+                $nlinksentInitial = $nlinksentImgWrapper.children(".initial")
 
-                setUserImage(token, row.receiver, $nlinksentInitial, $nlinksentImg, $nlinksentImgWrapper)
-            }
+            setUserImage(token, row.receiver, $nlinksentInitial, $nlinksentImg, $nlinksentImgWrapper)
 
             $nlinksent.children(".link-delete").remove()
             var $nlinksentExtra = $nlinksent.children(".link-extra")
@@ -304,16 +304,20 @@ function addtoList(token, row, i) {
 }
 
 function setUserImage(token, email, $initial, $linksimg, $linksimgwrapper) {
-    if (!(email in bg.contact))
-        return
+    if (email in bg.contact && bg.contact[email].src != "") {
+        var contact = bg.contact[email],
+            src = contact.src + "&access_token=" + token,
+            name = ("name" in contact && contact.name != "") ? contact.name + " (" + email + ")" : email;
 
-    var contact = bg.contact[email],
-        src = contact.src + "&access_token=" + token,
-        name = ("name" in contact && contact.name != "") ? contact.name + " (" + email + ")" : email;
+        $initial.text(name[0].toUpperCase())
 
-    $initial.text(name[0].toUpperCase())
-    $linksimg.attr("src", src).attr("title", name);
-    $linksimgwrapper.css("background-color", contact.color)
+        $linksimg.attr("src", src).attr("title", name);
+        $linksimgwrapper.css("background-color", contact.color)
+    } else {
+        $initial.text(email[0].toUpperCase())
+        $linksimg.remove();
+    }
+    $linksimgwrapper.attr("title", email)
 }
 
 function addtoRetryList(data) {
@@ -390,6 +394,8 @@ function sendlinkto(receiver) {
             //addtoRetryList(data)
         });
     });
+
+    // adding receiver to quick contacts
     bg.addToQuickContact(receiver)
     initQuickContacts()
 }
