@@ -25,30 +25,33 @@ var $wrapper,
 
 var $quickContacts;
 
+bg = chrome.extension.getBackgroundPage();
 document.addEventListener('DOMContentLoaded', function () {
     //console.log(chrome.extension);
-    bg = chrome.extension.getBackgroundPage();
     chrome.browserAction.setBadgeText({
         text: ""
     });
 
-    getTab(function (title, link, favicon) {
-        tabtitle = title;
-        taburl = link;
+    setTimeout(function () {
+        getTab(function (title, link, favicon) {
+            tabtitle = title;
+            taburl = link;
 
-        $("#tab-title").html(tabtitle);
-        $("#tab-url").html(taburl);
+            $("#tab-title").html(tabtitle);
+            $("#tab-url").html(taburl);
 
-        //console.log(favicon,favicon.startsWith("chrome://"));
+            //console.log(favicon,favicon.startsWith("chrome://"));
 
-        var favimg = $("#tab-favicon img");
-        if (favicon && (!favicon.startsWith("chrome://theme"))) {
-            favimg.css("visibility", "visible")
-            favimg.attr("src", favicon);
-        } else {
-            favimg.css("visibility", "hidden")
-        }
-    });
+            var favimg = $("#tab-favicon img");
+            if (favicon && (!favicon.startsWith("chrome://theme"))) {
+                favimg.css("visibility", "visible")
+                favimg.attr("src", favicon);
+            } else {
+                favimg.css("visibility", "hidden")
+            }
+        });
+    })
+
     bg.getUser(function (email, id) {});
 
     var sendbtn = document.getElementById("send");
@@ -75,12 +78,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var $linkstab = $("#links-tab")
     $received = $linkstab.children(".received")
     $sent = $linkstab.children(".sent")
-    $received.click(changetab)
-    $sent.click(changetab)
 
     $linkswrapper = $("#links-wrapper")
     $lwReceived = $linkswrapper.children(".lw-received")
     $lwSent = $linkswrapper.children(".lw-sent")
+    $lws = $linkswrapper.children()
+
+    $linksTabHeader = $(".links-tab-header");
+    $linksTabHeader.each(function (i, tab) {
+        tab.onclick = changetab.bind(tab, i)
+    })
 
     $link = $linkswrapper.find(".link")
     $link.remove();
@@ -117,18 +124,19 @@ function quickContactsClick(ev) {
     var self = $(this)
     self.removeClass("active")
     self.addClass("active")
-    setTimeout(sendlinkto.bind(this,self.data("email")), 500)
+    setTimeout(sendlinkto.bind(this, self.data("email")), 500)
     return false;
 }
 
-function changetab() {
+function changetab(i) {
     if ($(this).hasClass("selected"))
         return
 
-    $received.toggleClass("selected")
-    $sent.toggleClass("selected")
-    $lwReceived.toggleClass("hide")
-    $lwSent.toggleClass("hide")
+    $linksTabHeader.removeClass("selected")
+    $linksTabHeader.eq(i).addClass("selected")
+
+    $lws.addClass("hide")
+    $lws.eq(i).removeClass("hide")
 }
 
 function emailkeyup(ev) {
@@ -142,6 +150,11 @@ function emailkeyup(ev) {
 
     clearTimeout(ajaxtimeout);
     ajaxtimeout = setTimeout(function () {
+        if (!$wrapper.hasClass("send")) {
+            closeEmail();
+            return;
+        }
+
         $emailinput.autocomplete({
             minLength: 0,
             source: []
@@ -173,7 +186,8 @@ function emailkeyup(ev) {
                     entries.forEach(function (entry, i) {
                         if (entry.hasOwnProperty("gd$email")) {
                             //console.log(entry.gd$email[0].address);
-                            emails.push(entry.gd$email[0].address);
+                            emails.push(entry.gd$email[0].address.toLowerCase());
+
                         }
                     });
                     $emailinput.autocomplete({
@@ -268,7 +282,7 @@ function addtoList(token, row, i) {
     if (bg.useremail) {
         //========SENT LIST
         if (row.sender == bg.useremail) {
-            var $nlinksent = $nlink.clone(true, true)
+            var $nlinksent = $($nlink[0].outerHTML);
 
             //img of receiver
             var $nlinksentImgWrapper = $nlinksent.children(".link-simg-wrapper"),

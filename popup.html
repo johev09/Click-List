@@ -1,33 +1,25 @@
-<!doctype html>
-<!--
- This page is shown when the extension button is clicked, because the
- "browser_action" field in manifest.json contains the "default_popup" key with
- value "popup.html".
- -->
-<html>
+<!DOCTYPE html>
+<html ng-app="popup" ng-csp>
 
 <head>
     <title>Click Lists's Popup</title>
 
     <link rel="stylesheet" type="text/css" href="./fonts/font-awesome/css/font-awesome.css" />
-    <script src="./js/jquery-2.2.4.min.js"></script>
     <link rel="stylesheet" href="./css/jquery-ui.css">
-    <script src="./js/jquery-ui.js"></script>
-
     <link rel="stylesheet" type="text/css" href="popup.css" />
-    <script src="popup.js"></script>
+
 </head>
 
-<body>
+<body ng-controller='popup-controller'>
     <div id="wrapper">
         <div id="btns">
             <span id="quick-contacts">
 <!--
                 <span class="link-simg-wrapper">
                     <span class="initial"></span>
-                    <img class="link-simg" />
-                </span>
--->
+            <img class="link-simg" />
+            </span>
+            -->
             </span>
             <button type="button" id="send"><i class="fa fa-paper-plane"></i> SEND</button>
             <!--            <button type="buton" id="refresh"><i class="fa fa-refresh"></i> REFRESH</button>-->
@@ -48,13 +40,16 @@
             </span>
             <span id="tab-url"></span>
         </div>
-        <span id="message"></span>
+        <div id="search">
+            <span><i class="fa fa-search"></i> </span> <input ng-model="searchstr" type="text" placeholder="..." />
+        </div>
         <div id="links-tab">
             <span class="links-tab-header received selected">Received</span>
             <span class="links-tab-header sent">Sent</span>
+            <span class="links-tab-header contacts">Contacts</span>
         </div>
         <div id="links-wrapper">
-            <div class="lw-received">
+            <div class="lw lw-received">
                 <div class="link">
                     <span class="link-simg-wrapper">
                     <span class="initial"></span>
@@ -69,9 +64,30 @@
                     <span class="link-delete"><i class="fa fa-trash-o"></i></span>
                 </div>
             </div>
-            <div class="lw-sent hide"></div>
+            <div class="lw lw-sent hide"></div>
+            <div class="lw lw-contacts hide" ng-controller="contacts-controller" when-scrolled="loadMore()">
+                <div data-ng-repeat="c in contacts | searchContact: searchstr | orderBy:'name' | limitTo: contactsMax" class="contact-div" my-post-repeat-directive>
+                    <span class="link-simg-wrapper">
+                        <span class="initial">{{ c.name[0] | uppercase }}</span>
+                        <img data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                    </span>
+
+                    <div class="link-detail">
+                        <p class="link-url" title="{{ c.email }}">{{ c.name }}</p>
+                    </div>
+                </div>
+            </div>
         </div>
+        <span id="message"></span>
     </div>
+
+    <script src="js/jquery-2.2.4.min.js"></script>
+    <script src="js/jquery-ui.js"></script>
+    <script src="js/jquery.batchedimageloader.js"></script>
+    <script src="popup.js"></script>
+
+    <script src="js/angular.min.js"></script>
+    <script src="js/app.js"></script>
 </body>
 
 </html>

@@ -1,14 +1,8 @@
-var intranet_list = [
-  "ws://52.33.207.145:5001"
-]; // Make this configurable
+var app = angular.module('MyApp', []);
 
-var config = {
-    mode: "direct",
-};
-chrome.proxy.settings.set({
-    value: config,
-    scope: "regular"
-});
+
+var contact = {},
+    contacts = [];
 
 var gotdata = false,
     data,
@@ -20,10 +14,16 @@ var sentLinksBylid = {},
     receivedLinksBylid = {};
 
 var defaultsrc = "envelope.png";
+var defaultNotifyIcon = "pointing.png";
 var chime = new Audio('chime.mp3')
 
 var URL_WS = 'ws://52.33.207.145:5001';
 //var URL_WS = 'ws://localhost:5001';
+
+var data_lids = new Set();
+var notifications = {};
+
+var access_token;
 
 function getAllContacts() {
     write("trying to get all contacts...")
@@ -66,9 +66,17 @@ function getAllContacts() {
                             src: src,
                             color: "dodgerblue" //colors.getRandom()
                         };
+
+                        contacts.push({
+                            email: email,
+                            name: name == "" ? email : name,
+                            src: src,
+                            color: "dodgerblue"
+                        });
                     }
                 });
 
+                initContextMenus();
                 console.log(contact);
             }
         }
@@ -88,6 +96,8 @@ function getData(cb) {
         console.log(items);
         if ("data" in items)
             cb(items.data)
+        else
+            cb([])
     })
 }
 
@@ -101,6 +111,7 @@ function getQuickContacts(cb) {
 }
 
 function saveData() {
+
     // checking for new links
     var new_links = [],
         new_data_lids = new Set();
@@ -110,55 +121,53 @@ function saveData() {
         }
         if (useremail && link.receiver == useremail) {
             receivedLinksBylid[link.lid] = data[i]
-        }
 
-        if (!data_lids.has(link.lid)) {
-            new_links.push(link)
+            if (!data_lids.has(link.lid)) {
+                new_links.push(link)
+            }
         }
         new_data_lids.add(link.lid)
     })
     data_lids = new_data_lids
 
-    if (data.length > lastcount) {
+    if (new_links.length) {
         chrome.browserAction.setBadgeText({
-            text: "" + (data.length - lastcount)
+            text: "" + new_links.length
         });
 
-        if (new_links.length) {
-            getAuthToken(function (token) {
-                new_links.forEach(function (link) {
-                    var title = "Unknown (" + link.sender + ")",
-                        message = link.title,
-                        iconUrl = ""
+        getAuthToken(function (token) {
+            new_links.forEach(function (link) {
+                var title = link.sender,
+                    message = link.title,
+                    iconUrl = ""
 
-                    if (link.sender in contact) {
-                        var sender = contact[link.sender]
-                        title = sender.name
-                        iconUrl = sender.src + "&access_token=" + token
-                    } else {
-                        return
-                    }
+                if (link.sender in contact) {
+                    var sender = contact[link.sender]
+                    title = (sender.name == "" ? title : sender.name)
+                    iconUrl = sender.src + "&access_token=" + token
+                } else {
+                    iconUrl = defaultNotifyIcon
+                }
 
-                    chrome.notifications.create(null, {
-                        type: "basic",
-                        title: title,
-                        message: message,
-                        contextMessage: link.link,
-                        iconUrl: iconUrl,
-                        buttons: [{
-                            title: "Check Link",
-                            iconUrl: "happy.png"
+                chrome.notifications.create(null, {
+                    type: "basic",
+                    title: title,
+                    message: message,
+                    contextMessage: link.link,
+                    iconUrl: iconUrl,
+                    buttons: [{
+                        title: "Check Link",
+                        iconUrl: "happy.png"
                     }, {
-                            title: "Later...",
-                            iconUrl: "bored.png"
+                        title: "Later...",
+                        iconUrl: "bored.png"
                     }]
-                    }, function (id) {
-                        notifications[id] = link.lid
-                        chime.play()
-                    })
+                }, function (id) {
+                    notifications[id] = link.lid
+                    chime.play()
                 })
             })
-        }
+        })
     }
 
     // Save it using the Chrome extension storage API.
@@ -177,21 +186,66 @@ function saveQuickContacts(cb) {
         // Notify that we saved.
         console.log('Quick Contacts saved');
     });
-}
 
-getData(function (localdata) {
-    data = localdata
-    lastcount = data.length
-    // data from storage is cached so keeping lids in old data_lids Set
-    data.forEach(function (link, i) {
-        data_lids.add(link.lid)
-    })
-    
-    saveData()
-})
+    initContextMenus();
+}
 getQuickContacts(function (qcontacts) {
     quickContacts = qcontacts
+
+    saveQuickContacts()
 })
+
+function sendlinkto(receiver, link) {
+    getUser(function (email, id) {
+        getTitle(link, function (title) {
+            var data = {
+                lid: 0,
+                sender: email,
+                receiver: receiver,
+                title: title,
+                link: link,
+                favicon: ""
+            }
+
+            send({
+                type: "send",
+                data: data
+            });
+        })
+    });
+
+    // adding receiver to quick contacts
+    addToQuickContact(receiver)
+}
+
+function getTitle(url, cb) {
+    if (!cb)
+        return;
+    url = "http://opengraph.io/api/1.0/site/" + url;
+    $.get(url, function (res) {
+        //console.log(res.hybridGraph.title);
+        cb(res.hybridGraph.title)
+    })
+}
+
+function initContextMenus() {
+    chrome.contextMenus.removeAll();
+
+    var reverse = quickContacts.slice(0).reverse();
+    reverse.forEach(function (email) {
+        var name = (email in contact && contact[email].name != "") ? contact[email].name : email //contact[email].name+" ("+email+")" : email
+        chrome.contextMenus.create({
+            title: name,
+            contexts: ["link"],
+            onclick: function (info, tab) {
+                // Opens Popup.html in new tab
+                //                window.open(chrome.extension.getURL('popup.html'),
+                //                        "_blank", "width=550,height=200,location=0,resizable=0")
+                sendlinkto(email, info.linkUrl)
+            }
+        });
+    })
+}
 
 function notifLinkOpen(lid) {
     window.open(receivedLinksBylid[lid].link)
@@ -229,9 +283,6 @@ function linkOpened(lid) {
     })
 }
 
-var data_lids = new Set();
-var notifications = {};
-
 function write(text) {
     console.log(text);
 }
@@ -245,6 +296,7 @@ function getAuthToken(cb) {
     chrome.identity.getAuthToken({
         interactive: true
     }, function (token) {
+        access_token = token;
         if (cb)
             cb(token)
     })
@@ -269,62 +321,100 @@ var ws,
     wsconnecting = false,
     wsclosed = true;
 
+function setProxy(cb) {
+    var config = {
+        mode: "direct",
+    };
+    chrome.proxy.settings.set({
+        value: config,
+        scope: "regular"
+    }, function () {
+        if (cb)
+            cb();
+    });
+}
+
+function clearProxy() {
+    chrome.proxy.settings.clear({
+        scope: "regular"
+    })
+}
+
 function connectws() {
-    wsconnecting = true
+    getData(function (localdata) {
+        data = localdata
+        lastcount = data.length
+            // data from storage is cached so keeping lids in old data_lids Set
+        data.forEach(function (link, i) {
+            data_lids.add(link.lid)
+        })
+
+        saveData()
+        tryconnectws()
+    })
+}
+
+function tryconnectws() {
     write("trying to connectws...")
-    getUser(function (email, id) {
-        ws = new WebSocket(URL_WS, 'echo-protocol');
-        write('Connecting... (readyState ' + ws.readyState + ')');
-        ws.onopen = function (msg) {
-            write('Connection successfully opened (readyState ' + this.readyState + ')');
-            send({
-                type: "email",
-                data: email
-            });
-            wsconnecting = false
-            wsclosed = false
-        };
-        ws.onmessage = function (msg) {
-            //write('Server says: ' + msg.data);
+    wsconnecting = true
+    setProxy(function () {
+        getUser(function (email, id) {
+            ws = new WebSocket(URL_WS, 'echo-protocol');
+            write('Connecting... (readyState ' + ws.readyState + ')');
+            ws.onopen = function (msg) {
+                write('Connection successfully opened (readyState ' + this.readyState + ')');
+                send({
+                    type: "email",
+                    data: email
+                });
 
-            var rjson = JSON.parse(msg.data);
-            console.log(rjson);
+                clearProxy()
+                wsconnecting = false
+                wsclosed = false
+            };
+            ws.onmessage = function (msg) {
+                //write('Server says: ' + msg.data);
 
-            message = rjson.message;
-            if (rjson.success) {
-                switch (rjson.action) {
-                case "deleted":
-                case "sent":
-                    break
-                case "data":
-                    gotdata = true
-                    data = rjson.data
+                var rjson = JSON.parse(msg.data);
+                console.log(rjson);
 
-                    updatePopup()
-                    saveData()
+                message = rjson.message;
+                if (rjson.success) {
+                    switch (rjson.action) {
+                    case "deleted":
+                    case "sent":
+                        break
+                    case "data":
+                        gotdata = true
+                        data = rjson.data
+
+                        updatePopup()
+                        saveData()
+                    }
                 }
-            }
-        };
-        ws.onclose = function (msg) {
-            if (this.readyState == 2)
-                write('Closing... The connection is going throught the closing handshake (readyState ' + this.readyState + ')');
-            else if (this.readyState == 3) {
-                setTimeout(connectws, 1000)
-                write('Connection closed... The connection has been closed or could not be opened (readyState ' + this.readyState + ')');
-            } else {
-                setTimeout(connectws, 1000)
-                write('Connection closed... (unhandled readyState ' + this.readyState + ')');
-            }
-            wsclosed = true
-        };
-        ws.onerror = function (event) {
-            console.error(event.data);
-        };
+            };
+            ws.onclose = function (msg) {
+                if (this.readyState == 2)
+                    write('Closing... The connection is going throught the closing handshake (readyState ' + this.readyState + ')');
+                else if (this.readyState == 3) {
+                    clearProxy()
+                    setTimeout(connectws, 1000)
+                    write('Connection closed... The connection has been closed or could not be opened (readyState ' + this.readyState + ')');
+                } else {
+                    clearProxy()
+                    setTimeout(connectws, 1000)
+                    write('Connection closed... (unhandled readyState ' + this.readyState + ')');
+                }
+                wsclosed = true
+            };
+            ws.onerror = function (event) {
+                console.error(event.data);
+            };
+        })
     })
 }
 connectws()
 
-var contact = {};
 var quickContacts = [];
 var maxContact = 5;
 
@@ -373,67 +463,6 @@ function isOnline() {
     setTimeout(isOnline, 1000)
 }
 isOnline()
-
-//chrome.commands.onCommand.addListener(function (command) {
-//    console.log('Command:', command);
-//});
-//function refresh(callback) {
-//    //console.log(chrome.extension.getBackgroundPage().data);
-//    chrome.identity.getProfileUserInfo(function (userInfo) {
-//        var email = userInfo.email,
-//            uid = userInfo.id;
-//
-//        var xhr = new XMLHttpRequest();
-//        xhr.onreadystatechange = function () {
-//            if (xhr.readyState == 4 && xhr.status == 200) {
-//                var response = xhr.responseText;
-//                console.log(response);
-//                var rjson = JSON.parse(response);
-//                console.log(rjson);
-//
-//                if (rjson.success) {
-//                    data = rjson.data;
-//                    if (data.length > lastcount) {
-//                        chrome.browserAction.setBadgeText({
-//                            text: "" + (data.length - lastcount)
-//                        });
-//                    }
-//                    lastcount = data.length;
-//                }
-//                gotdata = rjson.success;
-//                message = rjson.message;
-//
-//                var views = chrome.extension.getViews({
-//                    type: "popup"
-//                });
-//                if (views.length) {
-//                    for (var i = 0; i < views.length; i++) {
-//                        views[i].filldata();
-//                    }
-//                }
-//
-//                if (callback)
-//                    callback();
-//                //showMessage(rjson.message);
-//            }
-//        };
-//
-//        var url = SERVER_URL;
-//        url += "action=refresh";
-//        url += "&email=" + encodeURIComponent(email);
-//        url += "&uid=" + uid;
-//
-//        xhr.open("GET", url, true);
-//        xhr.send();
-//    });
-//}
-
-//refresh();
-//function poll() {
-//    setTimeout(function () {
-//        //alert("yo");
-//        refresh(function() {
-//            poll();
-//        });
-//    }, 3000);
-//}
+    //chrome.commands.onCommand.addListener(function (command) {
+    //    console.log('Command:', command);
+    //});
