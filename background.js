@@ -1,5 +1,19 @@
-var app = angular.module('MyApp', []);
+const app = {
+    signedIn: false
+    init: () => {
+        // Listen for auth state changes.
+        firebase.auth().onAuthStateChanged(function (user) {
+            if (user) {
+                app.signedIn = true;
+            } else {
+                app.signedIn = false;
+            }
 
+            console.log('User state change detected from the Background script of the Chrome Extension:', user);
+        });
+    }
+}
+app.init();
 
 var contact = {},
     contacts = [];
@@ -87,7 +101,7 @@ function getAllContacts() {
         xhr.send();
     })
 }
-getAllContacts()
+/*getAllContacts()*/
 
 function getData(cb) {
     if (!cb)
@@ -189,11 +203,11 @@ function saveQuickContacts(cb) {
 
     initContextMenus();
 }
-getQuickContacts(function (qcontacts) {
+/*getQuickContacts(function (qcontacts) {
     quickContacts = qcontacts
 
     saveQuickContacts()
-})
+})*/
 
 function sendlinkto(receiver, link) {
     getUser(function (email, id) {
@@ -344,7 +358,7 @@ function connectws() {
     getData(function (localdata) {
         data = localdata
         lastcount = data.length
-            // data from storage is cached so keeping lids in old data_lids Set
+        // data from storage is cached so keeping lids in old data_lids Set
         data.forEach(function (link, i) {
             data_lids.add(link.lid)
         })
@@ -381,15 +395,15 @@ function tryconnectws() {
                 message = rjson.message;
                 if (rjson.success) {
                     switch (rjson.action) {
-                    case "deleted":
-                    case "sent":
-                        break
-                    case "data":
-                        gotdata = true
-                        data = rjson.data
+                        case "deleted":
+                        case "sent":
+                            break
+                        case "data":
+                            gotdata = true
+                            data = rjson.data
 
-                        updatePopup()
-                        saveData()
+                            updatePopup()
+                            saveData()
                     }
                 }
             };
@@ -413,7 +427,7 @@ function tryconnectws() {
         })
     })
 }
-connectws()
+/*connectws()*/
 
 var quickContacts = [];
 var maxContact = 5;
@@ -462,7 +476,4 @@ function isOnline() {
     //console.log(navigator.onLine,closed,connecting)
     setTimeout(isOnline, 1000)
 }
-isOnline()
-    //chrome.commands.onCommand.addListener(function (command) {
-    //    console.log('Command:', command);
-    //});
+//isOnline()

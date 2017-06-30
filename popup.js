@@ -1,6 +1,8 @@
 //var SERVER_URL="http://localhost/click-list/?";
 //var SERVER_URL = "http://globaljutebags.in/click_list/?",
-var bg;
+const bg = chrome.extension.getBackgroundPage();
+
+
 
 function showMessage(text) {
     document.getElementById('message').innerHTML = text;
@@ -24,11 +26,9 @@ var $wrapper,
     toms = 200;
 
 var $quickContacts;
-
-bg = chrome.extension.getBackgroundPage();
 document.addEventListener('DOMContentLoaded', function () {
     //console.log(chrome.extension);
-    chrome.browserAction.setBadgeText({
+    /*chrome.browserAction.setBadgeText({
         text: ""
     });
 
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setTimeout(filldata);
 
     $quickContacts = $("#quick-contacts")
-    setTimeout(initQuickContacts);
+    setTimeout(initQuickContacts);*/
 });
 
 function initQuickContacts() {

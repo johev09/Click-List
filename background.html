@@ -1,11 +1,23 @@
 <!DOCTYPE html>
-<html lang="en" ng-app="MyApp" ng-csp>
+<html lang="en">
 
 <head>
     <title>Background Page</title>
     <meta charset="UTF-8">
-    <script src="js/jquery-2.2.4.min.js"></script>
-    <script src="js/angular.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/4.1.3/firebase.js"></script>
+    <script>
+        // Initialize Firebase
+        var config = {
+            apiKey: "AIzaSyAviNF0i0UEg3dU6O91fQf47Y9tM--X53c",
+            authDomain: "clicklist-ac4b2.firebaseapp.com",
+            databaseURL: "https://clicklist-ac4b2.firebaseio.com",
+            projectId: "clicklist-ac4b2",
+            storageBucket: "clicklist-ac4b2.appspot.com",
+            messagingSenderId: "747275165469"
+        };
+        firebase.initializeApp(config);
+
+    </script>
     <script src="background.js"></script>
 </head>
 

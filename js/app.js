@@ -17,6 +17,73 @@ app.config([
 ]);
 app.controller('popup-controller', function ($scope, $window) {
     $scope.searchstr = ""
+    $scope.signedIn = bg.app.singedIn;
+    $scope.profile = {
+        name: "name",
+        email: "name@domain.com",
+        picture: "./bored.png"
+    }
+    
+    $scope.singIn = () => {
+        popup.startAuth(true);
+    }
+
+    const popup = {
+        gotToken: (token) => {
+            // Authrorize Firebase with the OAuth Access Token.
+            var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
+            firebase.auth().signInWithCredential(credential).catch(function (error) {
+                // The OAuth token might have been invalidated. Lets' remove it from cache.
+                if (error.code === 'auth/invalid-credential') {
+                    chrome.identity.removeCachedAuthToken({
+                        token: token
+                    }, function () {
+                        popup.startAuth(interactive);
+                    });
+                }
+            });
+        },
+        startAuth: (interactive) => {
+            // Request an OAuth token from the Chrome Identity API.
+            chrome.identity.getAuthToken({
+                interactive: interactive
+            }, function (token) {
+                if (chrome.runtime.lastError && !interactive) {
+                    console.log('It was not possible to get a token programmatically.');
+                } else if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError);
+                } else if (token) {
+                    popup.gotToken(token)
+                } else {
+                    console.error('The OAuth Token was null');
+                }
+            });
+        },
+        init: () => {
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) {
+                    // User is signed in.
+                    var displayName = user.displayName;
+                    var email = user.email;
+                    var emailVerified = user.emailVerified;
+                    var photoURL = user.photoURL;
+                    var isAnonymous = user.isAnonymous;
+                    var uid = user.uid;
+                    var providerData = user.providerData;
+
+                    $scope.signedIn = true;
+                    $scope.profile.name = displayName;
+                    $scope.profile.email = email;
+                    $scope.profile.picture = photoURL;
+                } else {
+                    console.log("signed out");
+                    $scope.signedIn = false;
+                }
+                $scope.$apply();
+            });
+        }
+    }
+    popup.init();
 });
 
 app.controller('contacts-controller', function ($scope) {
@@ -76,7 +143,7 @@ app.directive("whenScrolled", function () {
             // we load more elements when scrolled past a limit
             elem.bind("scroll", function () {
                 if (raw.scrollTop + raw.offsetHeight + 5 >= raw.scrollHeight) {
-//                    scope.loading = true;
+                    //                    scope.loading = true;
 
                     // we can give any function which loads more elements into the list
                     scope.$apply(attrs.whenScrolled);

@@ -69,7 +69,7 @@
                 <div data-ng-repeat="c in contacts | searchContact: searchstr | orderBy:'name' | limitTo: contactsMax" class="contact-div" my-post-repeat-directive>
                     <span class="link-simg-wrapper">
                         <span class="initial">{{ c.name[0] | uppercase }}</span>
-                        <img data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                    <img data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
                     </span>
 
                     <div class="link-detail">
@@ -80,10 +80,28 @@
         </div>
         <span id="message"></span>
     </div>
+    <div class="sing-in-container fill-container vertical-center">
+        <button class="sign-in-btn" ng-click="signIn()"><i class="fa fa-google"></i> SIGN IN</button>
+    </div>
 
     <script src="js/jquery-2.2.4.min.js"></script>
     <script src="js/jquery-ui.js"></script>
     <script src="js/jquery.batchedimageloader.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/4.1.3/firebase.js"></script>
+    <script>
+        // Initialize Firebase
+        var config = {
+            apiKey: "AIzaSyAviNF0i0UEg3dU6O91fQf47Y9tM--X53c",
+            authDomain: "clicklist-ac4b2.firebaseapp.com",
+            databaseURL: "https://clicklist-ac4b2.firebaseio.com",
+            projectId: "clicklist-ac4b2",
+            storageBucket: "clicklist-ac4b2.appspot.com",
+            messagingSenderId: "747275165469"
+        };
+        firebase.initializeApp(config);
+
+    </script>
     <script src="popup.js"></script>
 
     <script src="js/angular.min.js"></script>

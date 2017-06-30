@@ -304,7 +304,7 @@ a:link {
     font-size: 10pt;
 }
 
-p {
+#links p {
     margin: 0;
     padding: 0;
     text-align: left;
@@ -420,4 +420,34 @@ p {
     outline: none;
     font-size: 0.9rem;
     color: rgba(0, 0, 0, 0.5);
+}
+
+
+
+
+
+.fill-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+.vertical-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button {
+    padding: 10px;
+    background: transparent;
+    border: 2px solid yellowgreen;
+    color: yellowgreen;
+    font-size: 12pt;
+}
+
+button i {
+    padding: 0px 5px;
 }
