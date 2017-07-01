@@ -11,18 +11,24 @@
 </head>
 
 <body ng-controller='popup-controller'>
-    <div id="wrapper">
+    <div class="profile vertical-center">
+        <img class="profile-picture" ng-src="{{profile.picture}}" />
+        <div class="profile-details">
+            <p class="profile-name">{{profile.name}}</p>
+            <p class="profile-email"><small><i>{{profile.email}}</i></small></p>
+        </div>
+    </div>
+    <div id="email-form">
+        <form autocomplete="off" ng-submit="send()">
+            <input class="ui-widget" type="text" id="emailinput" placeholder="Start typing Email, Name for suggestions. Press Enter to Send" autofocus ng-model="email" />
+            <input id="emailsubmit" type="submit" value="submit" />
+        </form>
+    </div>
+    <!--<div id="wrapper">
         <div id="btns">
             <span id="quick-contacts">
-<!--
-                <span class="link-simg-wrapper">
-                    <span class="initial"></span>
-            <img class="link-simg" />
-            </span>
-            -->
             </span>
             <button type="button" id="send"><i class="fa fa-paper-plane"></i> SEND</button>
-            <!--            <button type="buton" id="refresh"><i class="fa fa-refresh"></i> REFRESH</button>-->
         </div>
         <div id="email-form">
             <form autocomplete="off">
@@ -30,26 +36,27 @@
                 <input id="emailsubmti" type="submit" value="submit" />
             </form>
         </div>
-    </div>
+    </div>-->
     <div id="links">
-        <div id="tab">
+        <div id="tab" class="vertical-center" ng-controller="tab-controller">
             <span id="tab-favicon">
-                <img src=""/>
+                <img ng-src="{{tabFavicon}}"/>
             </span>
-            <span id="tab-title">
-            </span>
-            <span id="tab-url"></span>
+            <span id="tab-title">{{tabTitle}}</span>
+            <span id="tab-url">{{tabURL}}</span>
         </div>
         <div id="search">
             <span><i class="fa fa-search"></i> </span> <input ng-model="searchstr" type="text" placeholder="..." />
         </div>
         <div id="links-tab">
-            <span class="links-tab-header received selected">Received</span>
-            <span class="links-tab-header sent">Sent</span>
-            <span class="links-tab-header contacts">Contacts</span>
+            <span ng-repeat="header in tabHeaders track by $index" class="links-tab-header" ng-class="{'selected' : $index == selectedTabIndex}" ng-click="showTab($index)">{{header}}</span>
+
+            <!--<span class="links-tab-header selected">Received</span>
+            <span class="links-tab-header">Sent</span>
+            <span class="links-tab-header">Contacts</span>-->
         </div>
         <div id="links-wrapper">
-            <div class="lw lw-received">
+            <div class="lw lw-received" ng-show="selectedTabIndex === 0">
                 <div class="link">
                     <span class="link-simg-wrapper">
                     <span class="initial"></span>
@@ -64,23 +71,24 @@
                     <span class="link-delete"><i class="fa fa-trash-o"></i></span>
                 </div>
             </div>
-            <div class="lw lw-sent hide"></div>
-            <div class="lw lw-contacts hide" ng-controller="contacts-controller" when-scrolled="loadMore()">
-                <div data-ng-repeat="c in contacts | searchContact: searchstr | orderBy:'name' | limitTo: contactsMax" class="contact-div" my-post-repeat-directive>
+            <div class="lw lw-sent" ng-click="showSent()" ng-show="selectedTabIndex === 1"></div>
+            <div class="lw lw-contacts" ng-click="showContacts()" ng-show="selectedTabIndex === 2" ng-controller="contacts-controller" when-scrolled="loadMore()">
+                <div class="list-item-div vertical-center" data-ng-repeat="c in contacts | searchContact: searchstr | orderBy:'name' | limitTo: contactsMax track by $index" ng-click="contactClicked(c)" my-post-repeat-directive>
                     <span class="link-simg-wrapper">
                         <span class="initial">{{ c.name[0] | uppercase }}</span>
-                    <img data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                        <img ng-hide="c.src === null" data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
                     </span>
 
                     <div class="link-detail">
-                        <p class="link-url" title="{{ c.email }}">{{ c.name }}</p>
+                        <p class="contact-name">{{ c.name }}</p>
+                        <p class="contact-email"><small>{{c.email}}</small></p>
                     </div>
                 </div>
             </div>
         </div>
         <span id="message"></span>
     </div>
-    <div class="sing-in-container fill-container vertical-center">
+    <div class="sign-in-container fill-container vertical-center hide-opacity" ng-hide="signedIn">
         <button class="sign-in-btn" ng-click="signIn()"><i class="fa fa-google"></i> SIGN IN</button>
     </div>
 
@@ -89,19 +97,6 @@
     <script src="js/jquery.batchedimageloader.js"></script>
 
     <script src="https://www.gstatic.com/firebasejs/4.1.3/firebase.js"></script>
-    <script>
-        // Initialize Firebase
-        var config = {
-            apiKey: "AIzaSyAviNF0i0UEg3dU6O91fQf47Y9tM--X53c",
-            authDomain: "clicklist-ac4b2.firebaseapp.com",
-            databaseURL: "https://clicklist-ac4b2.firebaseio.com",
-            projectId: "clicklist-ac4b2",
-            storageBucket: "clicklist-ac4b2.appspot.com",
-            messagingSenderId: "747275165469"
-        };
-        firebase.initializeApp(config);
-
-    </script>
     <script src="popup.js"></script>
 
     <script src="js/angular.min.js"></script>

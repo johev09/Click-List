@@ -1,10 +1,104 @@
-const app = {
-    signedIn: false
+// Initialize Firebase
+const config = {
+    apiKey: "AIzaSyAviNF0i0UEg3dU6O91fQf47Y9tM--X53c",
+    authDomain: "clicklist-ac4b2.firebaseapp.com",
+    databaseURL: "https://clicklist-ac4b2.firebaseio.com",
+    projectId: "clicklist-ac4b2",
+    storageBucket: "clicklist-ac4b2.appspot.com",
+    messagingSenderId: "747275165469"
+};
+firebase.initializeApp(config);
+
+var app = {
+    signedIn: false,
+    user: {},
+    token: null,
+    emailToContact: {},
+    contacts: [],
+    retryTimeout: 2000,
+    processContacts: (entries) => {
+        console.log("processing contacts response...");
+        entries.forEach(function (entry) {
+            if (entry.hasOwnProperty("gd$email")) {
+                var email = entry.gd$email[0].address,
+                    name = null,
+                    src = null;
+
+                if ("gd$name" in entry) {
+                    name = entry.gd$name.gd$fullName.$t;
+                }
+
+                var links = entry.link;
+                links.some(function (link) {
+                    if (link.type === "image/*") {
+                        if ("gd$etag" in link) {
+                            src = link.href; // + "&access_token=" + token;
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+
+                var contact = {
+                    email: email,
+                    name: name === null ? email : name,
+                    src: src,
+                    color: "dodgerblue"
+                };
+                app.emailToContact[email] = contact;
+                app.contacts.push(contact);
+            }
+        });
+
+        console.log(app.contacts);
+    },
+    getContacts: (token) => {
+        app.token = token;
+        console.log(token);
+        console.log("requesting for contacts for: " + app.user.email);
+
+        var api = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&max-results=999";
+        api += "&v=3.0";
+        //url +="&orderby=lastmodified&sortorder=descending";
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', api);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.onload = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                var response = JSON.parse(xhr.responseText);
+                var entries = response.feed.entry;
+                if (response && response.feed && response.feed.entry) {
+                    app.processContacts(response.feed.entry);
+                } else {
+                    console.log("fetched contacts, got nothing");
+                }
+            }
+        }
+        xhr.onerror = function (err) {
+            console.error("failed to fetch contacts", err);
+            setTimeout(() => getAllContacts(token), app.retryTimeout);
+        }
+        xhr.send(null);
+    },
+    getToken: (cb) => {
+        if(!cb) return;
+        
+        chrome.identity.getAuthToken({
+            interactive: false
+        }, (token) => {
+            if (token) {
+                cb(token);
+            }
+        });
+    },
     init: () => {
         // Listen for auth state changes.
         firebase.auth().onAuthStateChanged(function (user) {
             if (user) {
                 app.signedIn = true;
+                app.user = user;
+                app.getToken(app.getContacts);
             } else {
                 app.signedIn = false;
             }

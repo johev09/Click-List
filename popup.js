@@ -1,9 +1,5 @@
 //var SERVER_URL="http://localhost/click-list/?";
 //var SERVER_URL = "http://globaljutebags.in/click_list/?",
-const bg = chrome.extension.getBackgroundPage();
-
-
-
 function showMessage(text) {
     document.getElementById('message').innerHTML = text;
 }

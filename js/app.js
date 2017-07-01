@@ -1,6 +1,15 @@
-String.prototype.contains = function (substr) {
-    return this.indexOf(substr) > -1;
-}
+// Initialize Firebase
+var config = {
+    apiKey: "AIzaSyAviNF0i0UEg3dU6O91fQf47Y9tM--X53c",
+    authDomain: "clicklist-ac4b2.firebaseapp.com",
+    databaseURL: "https://clicklist-ac4b2.firebaseio.com",
+    projectId: "clicklist-ac4b2",
+    storageBucket: "clicklist-ac4b2.appspot.com",
+    messagingSenderId: "747275165469"
+};
+firebase.initializeApp(config);
+
+const bg = chrome.extension.getBackgroundPage();
 
 var app = angular.module('popup', []);
 //You need to explicitly add URL protocols to Angular's whitelist using a regular expression. 
@@ -17,18 +26,31 @@ app.config([
 ]);
 app.controller('popup-controller', function ($scope, $window) {
     $scope.searchstr = ""
+    $scope.email = ""
     $scope.signedIn = bg.app.singedIn;
     $scope.profile = {
         name: "name",
         email: "name@domain.com",
         picture: "./bored.png"
     }
-    
+    $scope.tabHeaders = ["Received", "Sent", "Contacts"];
+
+    $scope.send = () => {
+        console.log($scope.email);
+    }
     $scope.singIn = () => {
         popup.startAuth(true);
     }
+    $scope.showTab = (index) => {
+        $scope.selectedTabIndex = index;
+    }
+    $scope.contactClicked = (contact) => {
+        $scope.email = contact.email;
+    }
+    $scope.showTab(0);
 
     const popup = {
+        emailInput: $("#emailinput"),
         gotToken: (token) => {
             // Authrorize Firebase with the OAuth Access Token.
             var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
@@ -59,7 +81,7 @@ app.controller('popup-controller', function ($scope, $window) {
                 }
             });
         },
-        init: () => {
+        initFirebase: () => {
             firebase.auth().onAuthStateChanged(function (user) {
                 if (user) {
                     // User is signed in.
@@ -81,19 +103,56 @@ app.controller('popup-controller', function ($scope, $window) {
                 }
                 $scope.$apply();
             });
+        },
+        initUI: () => {
+        },
+        init: () => {
+            popup.initUI();
+            popup.initFirebase();
+            if ($scope.signedIn) {
+                popup.startAuth(false);
+            }
         }
     }
     popup.init();
 });
 
 app.controller('contacts-controller', function ($scope) {
-    $scope.contacts = bg.contacts
-
+    $scope.contacts = bg.app.contacts;
     $scope.contactsMax = 10;
 
     $scope.loadMore = function () {
         $scope.contactsMax += 10;
     }
+})
+
+app.controller('tab-controller', function($scope) {
+    $scope.tabFavicon = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    $scope.tabTitle = '';
+    $scope.tabURL = '';
+    
+    chrome.tabs.query({
+        active: true,
+        currentWindow: true
+    }, function (tabs) {
+        var tab = tabs[0],
+            link = tab.url,
+            title = tab.title;
+
+        var favicon = null;
+        if (tab.favIconUrl && tab.favIconUrl != '' &&
+            tab.favIconUrl.indexOf('chrome://favicon/') == -1) {
+            // favicon appears to be a normal url
+            $scope.tabFavicon = tab.favIconUrl;
+        } else {
+            // couldn't obtain favicon as a normal url, try chrome://favicon/url
+            $scope.tabFavicon = 'chrome://favicon/' + link;
+        }
+        
+        $scope.tabTitle = title;
+        $scope.tabURL = link;
+        $scope.$apply();
+    });
 })
 
 app.directive('myPostRepeatDirective', function () {
@@ -107,7 +166,6 @@ app.directive('myPostRepeatDirective', function () {
         }
     };
 });
-
 app.filter('searchContact', function () {
     return function (arr, searchstr) {
         var res = [];
@@ -127,7 +185,12 @@ app.filter('searchContact', function () {
 })
 app.filter('imgsrcFilter', function () {
     return function (src) {
-        return src == '' ? '' : src + "&access_token=" + bg.access_token;
+        if (src) {
+            return src + "&access_token=" + bg.app.token;
+        } else {
+            //blank transparent gif
+            return 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        }
     }
 })
 
@@ -152,3 +215,10 @@ app.directive("whenScrolled", function () {
         }
     }
 });
+
+
+
+
+String.prototype.contains = function (substr) {
+    return this.indexOf(substr) > -1;
+}
