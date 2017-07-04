@@ -17,8 +17,16 @@
                     loaded = $el.data('imgLoaded');
                 
                 if (!loaded && $el.data('imgSrc')) {
+                    el.onload = function() {
+                        $el.data('imgLoaded', true);
+                        $el.addClass("img-loaded");
+                    }
+                    el.onerror = function() {
+                        $el.addClass('img-error');
+                        $el.addClass('ng-hide');
+                    }
+                    
                     el.src = $el.data('imgSrc');
-                    $el.data('imgLoaded', true);
                     $el.removeClass(options.className);
                 }
             });

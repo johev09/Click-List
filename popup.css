@@ -242,7 +242,13 @@ a:link {
 }
 
 .initial {
+    position: absolute;
+    top: 0;
+    left: 0;
     line-height: 40px;
+    width: 40px;
+    height: 40px;
+    text-align: center;
 }
 
 .link-detail {
@@ -433,9 +439,11 @@ button i {
 
 #email-form form {
     width: 100%;
+    display: flex;
 }
 
-#email-form form input {
+#email-form form input[type="text"] {
+    flex: 1;
     font-family: inherit;
     font-size: 11pt;
     box-sizing: border-box;
@@ -443,12 +451,37 @@ button i {
     height: 100%;
     padding: 0.5em;
     border-width: 0px;
-    border-bottom: 2px solid yellowgreen;
+    /*    border-bottom: 2px solid yellowgreen;*/
     outline: none;
+    text-align: left;
+}
+
+#email-form form.before:before {
+    bottom: 0;
+    height: 2px;
+    background: yellowgreen;
+    width: 0%;
+    left: 0%;
+    /*    transform: translateX(-50%);*/
+    transition: width 0.5s;
+}
+
+#email-form form.before.not-empty:before {
+    width: 100%;
 }
 
 #email-form form input::-webkit-input-placeholder {
     color: lightgray;
+}
+
+.email-clear {
+    color: yellowgreen;
+    border: 0;
+}
+
+.email-clear:hover {
+    background: transparent;
+    color: crimson;
 }
 
 #email-form form input[type="submit"] {
@@ -470,10 +503,13 @@ button i {
     transition: all 0.25s;
     cursor: pointer;
 }
+
+.list-item-div.selected,
 .list-item-div:hover {
-/*    box-shadow: 0px 20px 20px -20px rgba(0, 0, 0, 0.6);*/
+    /*    box-shadow: 0px 20px 20px -20px rgba(0, 0, 0, 0.6);*/
     background: rgba(220, 220, 220, 0.3);
 }
+
 .list-item-div:not(:last-child) {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
@@ -481,12 +517,14 @@ button i {
 .contact-name {
     margin-bottom: 3px !important;
 }
+
 .contact-email {
     color: dodgerblue;
 }
 
 
 /*========TAB==========*/
+
 #tab {
     display: flex;
     flex-direction: row;
@@ -496,6 +534,7 @@ button i {
     overflow: hidden;
     border: 2px solid yellowgreen;
     color: black;
+    align-items: stretch;
 }
 
 #tab-favicon,
@@ -523,11 +562,26 @@ button i {
 
 #tab-title {
     flex: 1;
-/*    font-weight: bold;*/
+    /*    font-weight: bold;*/
 }
 
 #tab-url {
     flex: 2;
     background: yellowgreen;
     font-size: 9pt;
+    text-align: center;
 }
+
+
+/*========JQUERY AUTOCOMPLETE========*/
+
+.ui-widget {
+    font-family: 'Montserrat';
+}
+/*.link-simg {
+    opacity: 0;
+    transition: opacity 0.25s;
+}
+.link-simg.img-loaded {
+    opacity: 1;
+}*/

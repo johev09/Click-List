@@ -19,8 +19,9 @@
         </div>
     </div>
     <div id="email-form">
-        <form autocomplete="off" ng-submit="send()">
+        <form autocomplete="off" class="before" ng-class="{'not-empty' : email.length}" ng-submit="send()">
             <input class="ui-widget" type="text" id="emailinput" placeholder="Start typing Email, Name for suggestions. Press Enter to Send" autofocus ng-model="email" />
+            <button type="button" class="email-clear" ng-show="email.length" ng-click="emailClear()"><i class="fa fa-times"></i></button>
             <input id="emailsubmit" type="submit" value="submit" />
         </form>
     </div>
@@ -73,7 +74,7 @@
             </div>
             <div class="lw lw-sent" ng-click="showSent()" ng-show="selectedTabIndex === 1"></div>
             <div class="lw lw-contacts" ng-click="showContacts()" ng-show="selectedTabIndex === 2" ng-controller="contacts-controller" when-scrolled="loadMore()">
-                <div class="list-item-div vertical-center" data-ng-repeat="c in contacts | searchContact: searchstr | orderBy:'name' | limitTo: contactsMax track by $index" ng-click="contactClicked(c)" my-post-repeat-directive>
+                <div class="list-item-div vertical-center" ng-repeat="c in contacts | searchContact: searchstr | orderBy: 'name' | limitTo: contactsMax"  ng-click="contactClicked(c)" post-repeat-directive>
                     <span class="link-simg-wrapper">
                         <span class="initial">{{ c.name[0] | uppercase }}</span>
                         <img ng-hide="c.src === null" data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">

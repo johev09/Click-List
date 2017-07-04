@@ -39,14 +39,16 @@ var app = {
                     return false;
                 });
 
-                var contact = {
-                    email: email,
-                    name: name === null ? email : name,
-                    src: src,
-                    color: "dodgerblue"
-                };
-                app.emailToContact[email] = contact;
-                app.contacts.push(contact);
+                if (!(email in app.emailToContact)) {
+                    var contact = {
+                        email: email,
+                        name: name === null ? email : name,
+                        src: src,
+                        color: "dodgerblue"
+                    };
+                    app.emailToContact[email] = contact;
+                    app.contacts.push(contact);
+                }
             }
         });
 
@@ -82,8 +84,8 @@ var app = {
         xhr.send(null);
     },
     getToken: (cb) => {
-        if(!cb) return;
-        
+        if (!cb) return;
+
         chrome.identity.getAuthToken({
             interactive: false
         }, (token) => {
