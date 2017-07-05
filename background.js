@@ -83,16 +83,74 @@ var app = {
         }
         xhr.send(null);
     },
+    refreshToken: () => {
+        app.getToken()
+            .then(token => app.token = token)
+            .catch(app.printError);;
+    },
     getToken: (cb) => {
-        if (!cb) return;
-
-        chrome.identity.getAuthToken({
-            interactive: false
-        }, (token) => {
-            if (token) {
-                cb(token);
-            }
+        return new Promise((resolve, reject) => {
+            chrome.identity.getAuthToken({
+                interactive: false
+            }, (token) => {
+                if (token) {
+                    resolve(token);
+                } else {
+                    reject("failed to get token");
+                }
+            });
         });
+    },
+    getUserIdFromEmail: (email) => {
+        return email.slice(0, email.indexOf('@'));
+    },
+    getLinksRefKey: (email) => {
+        return '/users/' + app.getUserIdFromEmail(email) +
+            '/links';
+    },
+    getFromLinksRefKey: (email) => {
+        return app.getLinksRefKey(email) + '/from'
+    },
+    getToLinksRefKey: (email) => {
+        return app.getLinksRefKey(email) + '/to'
+    },
+    send: (link, email, success) => {
+        return new Promise((resolve, reject) => {
+            if (app.signedIn) {
+                var fromLinksRefkey = app.getFromLinksRefKey(email)
+                var toLinksRefkey = app.getToLinksRefKey(app.user.email);
+
+                var fromLinksKey = firebase.database().ref(fromLinksRefkey).push().key;
+                var toLinksKey = firebase.database().ref(toLinksRefkey).push().key;
+
+                var timestamp = new Date().getTime();
+
+                var updates = {};
+                updates[fromLinksRefkey + '/' + fromLinksKey] = {
+                    timestamp: timestamp,
+                    from: app.user.email,
+                    link: link
+                };
+                updates[toLinksRefkey + '/' + toLinksKey] = {
+                    timestamp: timestamp,
+                    to: email,
+                    link: link
+                };
+
+                firebase.database().ref()
+                    .update(updates)
+                    .then(() => resolve())
+                    .catch(err => reject(err));
+            } else {
+                reject("not signed in");
+            }
+        })
+    },
+    printError: (err) => {
+        console.log(err);
+    },
+    setupLinksFromListener: () {
+
     },
     init: () => {
         // Listen for auth state changes.
@@ -100,7 +158,11 @@ var app = {
             if (user) {
                 app.signedIn = true;
                 app.user = user;
-                app.getToken(app.getContacts);
+                app.getToken()
+                    .then(app.getContacts)
+                    .catch(app.printError);
+
+                app.setupLinksFromListener();
             } else {
                 app.signedIn = false;
             }

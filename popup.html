@@ -19,7 +19,7 @@
         </div>
     </div>
     <div id="email-form">
-        <form autocomplete="off" class="before" ng-class="{'not-empty' : email.length}" ng-submit="send()">
+        <form autocomplete="off" class="before" ng-class="{'not-empty' : email.length>0}" ng-submit="send()">
             <input class="ui-widget" type="text" id="emailinput" placeholder="Start typing Email, Name for suggestions. Press Enter to Send" autofocus ng-model="email" />
             <button type="button" class="email-clear" ng-show="email.length" ng-click="emailClear()"><i class="fa fa-times"></i></button>
             <input id="emailsubmit" type="submit" value="submit" />
@@ -41,10 +41,10 @@
     <div id="links">
         <div id="tab" class="vertical-center" ng-controller="tab-controller">
             <span id="tab-favicon">
-                <img ng-src="{{tabFavicon}}"/>
+                <img ng-src="{{tab.favicon}}"/>
             </span>
-            <span id="tab-title">{{tabTitle}}</span>
-            <span id="tab-url">{{tabURL}}</span>
+            <span id="tab-title">{{tab.title}}</span>
+            <span id="tab-url">{{tab.url}}</span>
         </div>
         <div id="search">
             <span><i class="fa fa-search"></i> </span> <input ng-model="searchstr" type="text" placeholder="..." />
@@ -80,7 +80,7 @@
                         <img ng-hide="c.src === null" data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
                     </span>
 
-                    <div class="link-detail">
+                    <div class="link-detail contact-details">
                         <p class="contact-name">{{ c.name }}</p>
                         <p class="contact-email"><small>{{c.email}}</small></p>
                     </div>

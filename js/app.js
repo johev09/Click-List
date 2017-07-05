@@ -26,7 +26,6 @@ app.config([
 ]);
 app.controller('popup-controller', function ($scope, $window) {
     $scope.searchstr = '';
-    ''
     $scope.email = '';
     $scope.signedIn = bg.app.singedIn;
     $scope.profile = {
@@ -35,9 +34,20 @@ app.controller('popup-controller', function ($scope, $window) {
         picture: "./bored.png"
     }
     $scope.tabHeaders = ["Received", "Sent", "Contacts"];
+    $scope.tab = {
+        favicon: 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=',
+        title: '',
+        url: ''
+    };
 
     $scope.send = () => {
-        console.log($scope.email);
+        popup.send({
+            title: $scope.tab.title,
+            url: $scope.tab.url,
+            favicon: $scope.tab.favicon
+        }, $scope.email);
+
+        $scope.emailClear();
     }
     $scope.signIn = () => {
         popup.startAuth(true);
@@ -53,91 +63,14 @@ app.controller('popup-controller', function ($scope, $window) {
         popup.emailinput.focus();
     }
     $scope.showTab(2);
-
-    $scope.$watch('email', (newValue, oldValue) => {
-        if (newValue) {
-            var suggestedContacts = bg.app.contacts.filter(contact => {
-                return (contact.email && contact.email.contains(newValue)) ||
-                    (contact.name && contact.name.contains(newValue));
-            });
-            suggestedContacts = suggestedContacts.sort((a, b) => {
-                return a.name.localeCompare(b.name);
-            })
-            suggestedContacts = suggestedContacts.slice(0, 4);
-            console.log(suggestedContacts);
-
-            popup.emailinput
-                .autocomplete({
-                    minLength: 0,
-                    source: suggestedContacts,
-                    select: (event, ui) => {
-                        /* $("#project").val(ui.item.label);
-                         $("#project-id").val(ui.item.value);
-                         $("#project-description").html(ui.item.desc);
-                         $("#project-icon").attr("src", "images/" + ui.item.icon);*/
-
-                        return false;
-                    }
-                })
-                .autocomplete("instance")._renderItem = (ul, item) => {
-                    var listItem = $("<div/>", {
-                        class: 'list-item-div vertical-center'
-                    });
-
-                    var imgWrapper = $("<span/>", {
-                        class: 'link-simg-wrapper'
-                    })
-                    var initial = $("<span/>", {
-                        class: 'initial',
-                        text: item.name[0].toUpperCase()
-                    })
-                    imgWrapper.append(initial);
-                    var img = $("<img>", {
-                        class: 'link-simg suggestion-batched-image-loader',
-                        "data-img-loaded": "false",
-                    })
-                    if (item.src) {
-                        img.attr("src", getProfilePictureSrc(item.src));
-                    } else {
-                        img.addClass("ng-hide");
-                    }
-                    imgWrapper.append(img);
-
-                    var contactName = $("<p/>", {
-                        class: 'contact-name',
-                        text: item.name
-                    });
-                    var contactEmail = $("<p/>", {
-                        class: 'contact-email',
-                        text: item.email
-                    });
-                    var contactDetails = $("<div/>", {
-                        class: 'link-detail'
-                    });
-                    contactDetails.append(contactName, contactEmail);
-
-                    listItem.append(imgWrapper, contactDetails);
-
-                    return listItem
-                        .appendTo(ul);
-                };
-            popup.emailinput.autocomplete("search", '');
-            $('.suggestion-batched-image-loader').batchedImageLoader({
-                delay: 1000, // in msecs
-                batchSize: 10, // size of each batch to load
-                className: 'batched-image-loader' // class on images
-            });
-        } else {
-            popup.emailinput
-                .autocomplete({
-                    minLength: 0,
-                    source: []
-                });
-        }
-    });
-
+    
     const popup = {
         emailinput: $("#emailinput"),
+        send: (link, to) => {
+            bg.app.send(link, to)
+                .then(() => console.log("success"))
+                .catch(err => console.log(err));
+        },
         getCurrentTab: () => {
             return new Promise(function (resolve, reject) {
                 chrome.tabs.query({
@@ -217,8 +150,90 @@ app.controller('popup-controller', function ($scope, $window) {
                 $scope.$apply();
             });
         },
-        initUI: () => {},
+        renderEmailSuggestion: (ul, item) => {
+            var listItem = $("<div/>", {
+                class: 'list-item-div vertical-center'
+            });
+
+            var imgWrapper = $("<span/>", {
+                class: 'link-simg-wrapper'
+            })
+            var initial = $("<span/>", {
+                class: 'initial',
+                text: item.name[0].toUpperCase()
+            })
+            imgWrapper.append(initial);
+            var img = $("<img>", {
+                class: 'link-simg suggestion-batched-image-loader',
+                "data-img-loaded": "false",
+            })
+            if (item.src) {
+                img.attr("src", getProfilePictureSrc(item.src));
+            } else {
+                img.addClass("ng-hide");
+            }
+            imgWrapper.append(img);
+
+            var contactName = $("<p/>", {
+                class: 'contact-name',
+                text: item.name
+            });
+            var contactEmail = $("<p/>", {
+                class: 'contact-email'
+            });
+            contactEmail.append($('<small>').text(item.email));
+
+            var contactDetails = $("<div/>", {
+                class: 'link-detail contact-details'
+            });
+            contactDetails.append(contactName, contactEmail);
+
+            listItem.append(imgWrapper, contactDetails);
+
+            return $("<li>", {
+                    class: 'vertical-center'
+                })
+                .append(listItem)
+                .appendTo(ul);
+        },
+        selectedEmailSuggestion: (email) => {
+            $scope.email = email;
+            $scope.$apply(() => {
+                $scope.send();
+            })
+        },
+        setupEmailSuggestion: () => {
+            popup.emailinput
+                .autocomplete({
+                    minLength: 0,
+                    source: (req, res) => {
+                        if (req && req.term) {
+                            var suggestedContacts = bg.app.contacts.filter(contact => {
+                                return (contact.email && contact.email.contains(req.term)) ||
+                                    (contact.name && contact.name.contains(req.term));
+                            });
+                            suggestedContacts = suggestedContacts.sort((a, b) => {
+                                return a.name.localeCompare(b.name);
+                            });
+                            res(suggestedContacts.slice(0, 4));
+                        }
+                    },
+                    focus: (event, ui) => {},
+                    select: (event, ui) => {
+                        if (ui.item && ui.item.email) {
+                            popup.selectedEmailSuggestion(ui.item.email)
+                        }
+                        return false;
+                    }
+                })
+                .autocomplete("instance")
+                ._renderItem = popup.renderEmailSuggestion;
+        },
+        initUI: () => {
+            popup.setupEmailSuggestion();
+        },
         init: () => {
+            bg.app.refreshToken();
             popup.initUI();
             popup.initFirebase();
             if ($scope.signedIn) {
@@ -259,18 +274,15 @@ app.controller('contacts-controller', function ($scope) {
 })
 
 app.controller('tab-controller', function ($scope) {
-    $scope.tabFavicon = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-    $scope.tabTitle = '';
-    $scope.tabURL = '';
 
     setTimeout(() => {
         $scope.$parent
             .popup
             .getCurrentTab()
             .then(tab => {
-                $scope.tabTitle = tab.title;
-                $scope.tabURL = tab.url;
-                $scope.tabFavicon = tab.favIcon;
+                $scope.tab.title = tab.title;
+                $scope.tab.url = tab.url;
+                $scope.tab.favicon = tab.favIcon;
                 $scope.$apply();
             })
     });

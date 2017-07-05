@@ -477,6 +477,7 @@ button i {
 .email-clear {
     color: yellowgreen;
     border: 0;
+    padding: 0;
 }
 
 .email-clear:hover {
@@ -500,7 +501,7 @@ button i {
     height: 70px;
     padding: 10px;
     box-sizing: border-box;
-    transition: all 0.25s;
+    transition: background 0.25s;
     cursor: pointer;
 }
 
@@ -514,10 +515,15 @@ button i {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.contact-details p {
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    padding-left: 20px;
+}
 .contact-name {
     margin-bottom: 3px !important;
 }
-
 .contact-email {
     color: dodgerblue;
 }
@@ -578,6 +584,24 @@ button i {
 .ui-widget {
     font-family: 'Montserrat';
 }
+
+.ui-state-hover,
+.ui-state-focus,
+.ui-state-active {
+    background-color: rgba(220, 220, 220, 0.3) !important;
+    background: rgba(220, 220, 220, 0.3);
+    !important;
+    color: inherit !important;
+    text-decoration: none !important;
+    border: 0 !important;
+    outline: none !important;
+}
+
+.ui-menu .ui-menu-item-wrapper {
+    padding: 10px;
+}
+
+
 /*.link-simg {
     opacity: 0;
     transition: opacity 0.25s;
