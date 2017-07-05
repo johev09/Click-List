@@ -12,7 +12,14 @@ firebase.initializeApp(config);
 var app = {
     signedIn: false,
     user: {},
+    links: {
+        fromKeys: [],
+        from: [],
+        to: [],
+        toKeys: []
+    },
     token: null,
+    popup: null,
     emailToContact: {},
     contacts: [],
     retryTimeout: 2000,
@@ -114,14 +121,35 @@ var app = {
     getToLinksRefKey: (email) => {
         return app.getLinksRefKey(email) + '/to'
     },
-    send: (link, email, success) => {
+    deleteLinkFrom: index => {
+        var val = app.links.from[index];
+        var key = app.links.fromKeys[index];
+        console.log("deleting link from...", val);
+        var linkRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key;
+        firebase.database().ref(linkRefKey)
+            .remove()
+            .then(() => console.log("successfully deleted link from", val))
+            .catch(app.printError);
+    },
+    deleteLinkTo: index => {
+        var val = app.links.to[index];
+        var key = app.links.toKeys[index];
+        console.log("deleting link to...", val);
+        var linkRefKey = app.getToLinksRefKey(app.user.email) + '/' + key;
+        firebase.database().ref(linkRefKey)
+            .remove()
+            .then(() => console.log("successfully deleted link to", val))
+            .catch(app.printError);
+    },
+    send: (link, email) => {
         return new Promise((resolve, reject) => {
             if (app.signedIn) {
                 var fromLinksRefkey = app.getFromLinksRefKey(email)
                 var toLinksRefkey = app.getToLinksRefKey(app.user.email);
 
                 var fromLinksKey = firebase.database().ref(fromLinksRefkey).push().key;
-                var toLinksKey = firebase.database().ref(toLinksRefkey).push().key;
+                var toLinksKey = fromLinksKey;
+                //                var toLinksKey = firebase.database().ref(toLinksRefkey).push().key;
 
                 var timestamp = new Date().getTime();
 
@@ -146,11 +174,107 @@ var app = {
             }
         })
     },
+
+    updateLink: (key, val) => {
+        var fromRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key + '/link';
+        var toRefKey = app.getToLinksRefKey(val.from) + '/' + key + '/link';
+
+        var updates = {};
+        updates[fromRefKey] = val.link;
+        updates[toRefKey] = val.link;
+        return firebase.database().ref().update(updates)
+    },
+    updateLinkOpened: val => {
+        if (!val.link.opened) {
+            console.log("updating link opened...", val);
+            var index = app.links.from.indexOf(val);
+            if (index !== -1) {
+                var key = app.links.fromKeys[index];
+
+                val.link.opened = true;
+                app.updateLink(key, val)
+                    .then(() => console.log("updated opened!", val))
+                    .catch(app.printError);
+            }
+        }
+    },
+    updateLinkRecevied: data => {
+        if (!data.val().link.received) {
+            var key = data.key;
+            var val = data.val();
+            var fromRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key + '/link';
+            var toRefKey = app.getToLinksRefKey(val.from) + '/' + key + '/link';
+
+            val.link.received = true;
+            var updates = {};
+            updates[fromRefKey] = val.link;
+            updates[toRefKey] = val.link;
+            firebase.database().ref()
+                .update(updates)
+                .then(() => console.log("received updated", val))
+                .catch(app.printError);
+        }
+    },
+    addedLinksFrom: data => {
+        app.links.fromKeys.push(data.key);
+        app.links.from.push(data.val());
+        console.log("added from link", data.val());
+        // if first time received
+        // update received boolean
+        if (!data.val().link.received) {
+            app.updateLinkRecevied(data);
+        }
+    },
+    removedLinksFrom: data => {
+        var index = app.links.fromKeys.indexOf(data.key);
+        if (index !== -1) {
+            app.links.fromKeys.splice(index, 1);
+            app.links.from.splice(index, 1);
+            console.log("removed from link added", data.val());
+        }
+    },
+    addedLinksTo: data => {
+        app.links.toKeys.push(data.key);
+        app.links.to.push(data.val());
+        console.log("added to link", data.val());
+    },
+    removedLinksTo: data => {
+        var index = app.links.toKeys.indexOf(data.key);
+        if (index !== -1) {
+            app.links.toKeys.splice(index, 1);
+            app.links.to.splice(index, 1);
+            console.log("removed to link added", data.val());
+        }
+    },
+    updatedLinksFrom: data => {
+        var index = app.links.fromKeys.indexOf(data.key);
+        if (index !== -1) {
+            app.links.from[index] = data.val();
+            console.log("updated link from", data.val());
+        }
+    },
+    updatedLinksTo: data => {
+        var index = app.links.toKeys.indexOf(data.key);
+        if (index !== -1) {
+            app.links.to[index] = data.val();
+            console.log("updated link to", data.val());
+        }
+    },
+    setupLinksListener: () => {
+        var linksFromRefKey = app.getFromLinksRefKey(app.user.email);
+        var userLinksFromRef = firebase.database().ref(linksFromRefKey);
+        userLinksFromRef.on('child_added', app.addedLinksFrom);
+        userLinksFromRef.on('child_changed', app.updatedLinksFrom);
+        userLinksFromRef.on('child_removed', app.removedLinksFrom);
+
+        var linksToRefKey = app.getToLinksRefKey(app.user.email);
+        var userLinksToRef = firebase.database().ref(linksToRefKey);
+        userLinksToRef.on('child_added', app.addedLinksTo);
+        userLinksToRef.on('child_changed', app.updatedLinksTo);
+        userLinksToRef.on('child_removed', app.removedLinksTo);
+    },
     printError: (err) => {
         console.log(err);
-    },
-    setupLinksFromListener: () {
-
     },
     init: () => {
         // Listen for auth state changes.
@@ -162,16 +286,33 @@ var app = {
                     .then(app.getContacts)
                     .catch(app.printError);
 
-                app.setupLinksFromListener();
+                app.setupLinksListener();
             } else {
                 app.signedIn = false;
             }
 
             console.log('User state change detected from the Background script of the Chrome Extension:', user);
         });
+    },
+    onMessage: msg => {},
+    onConnect: port => {
+        /*if (port.name == 'popup') {
+            port.onDisconnect.addListener(app.onDisconnect);
+            port.onMessage.addListener(app.onMessage);
+        }
+
+        console.log("connected", port);*/
+    },
+    onDisconnect: port => {
+        if (port.name == 'popup') {
+            app.popup = null;
+        }
+
+        console.log("disconnected", port);
     }
 }
 app.init();
+chrome.runtime.onConnect.addListener(app.onConnect);
 
 var contact = {},
     contacts = [];

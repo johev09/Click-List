@@ -251,13 +251,6 @@ a:link {
     text-align: center;
 }
 
-.link-detail {
-    width: calc(80% - 30px);
-    display: inline-block;
-    font-size: 10pt;
-    flex: 1;
-}
-
 #links p {
     margin: 0;
     padding: 0;
@@ -515,15 +508,25 @@ button i {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.link-details,
+.contact-details {
+/*    display: inline-block;*/
+    font-size: 10pt;
+    flex: 1;
+}
+
+.link-details p,
 .contact-details p {
     margin: 0;
     padding: 0;
     text-align: left;
     padding-left: 20px;
 }
+.link-title,
 .contact-name {
     margin-bottom: 3px !important;
 }
+.link-url,
 .contact-email {
     color: dodgerblue;
 }
@@ -602,6 +605,19 @@ button i {
 }
 
 
+/********** LINK ***********/
+
+.link-actions span {
+    font-size: 14pt;
+    padding: 0 5px;
+    color: gainsboro;
+}
+.link-actions span.enable {
+    color: yellowgreen;
+}
+.link-actions span.delete:hover {
+    color: crimson;
+}
 /*.link-simg {
     opacity: 0;
     transition: opacity 0.25s;

@@ -25,9 +25,15 @@ app.config([
     }
 ]);
 app.controller('popup-controller', function ($scope, $window) {
+    $scope.emailToContact = bg.app.emailToContact;
+    $scope.contacts = bg.app.contacts;
     $scope.searchstr = '';
     $scope.email = '';
     $scope.signedIn = bg.app.singedIn;
+    $scope.links = {
+        from: bg.app.links.from,
+        to: bg.app.links.to
+    };
     $scope.profile = {
         name: "name",
         email: "name@domain.com",
@@ -40,36 +46,27 @@ app.controller('popup-controller', function ($scope, $window) {
         url: ''
     };
 
-    $scope.send = () => {
-        popup.send({
-            title: $scope.tab.title,
-            url: $scope.tab.url,
-            favicon: $scope.tab.favicon
-        }, $scope.email);
-
-        $scope.emailClear();
-    }
-    $scope.signIn = () => {
-        popup.startAuth(true);
-    }
-    $scope.emailClear = () => {
-        $scope.email = '';
-    }
-    $scope.showTab = (index) => {
-        $scope.selectedTabIndex = index;
-    }
-    $scope.contactClicked = (contact) => {
-        $scope.email = contact.email;
-        popup.emailinput.focus();
-    }
-    $scope.showTab(2);
-    
+    /********* POPUP **********/
     const popup = {
         emailinput: $("#emailinput"),
         send: (link, to) => {
-            bg.app.send(link, to)
+            bg.app.send({
+                    title: $scope.tab.title,
+                    url: $scope.tab.url,
+                    favicon: $scope.tab.favicon,
+                    received: false,
+                    opened: false
+                }, $scope.email)
                 .then(() => console.log("success"))
                 .catch(err => console.log(err));
+            $scope.emailClear();
+        },
+        contactClicked: contact => {
+            $scope.email = contact.email;
+            popup.emailinput.focus();
+        },
+        showTab: (index) => {
+            $scope.selectedTabIndex = index;
         },
         getCurrentTab: () => {
             return new Promise(function (resolve, reject) {
@@ -229,11 +226,63 @@ app.controller('popup-controller', function ($scope, $window) {
                 .autocomplete("instance")
                 ._renderItem = popup.renderEmailSuggestion;
         },
+        signIn: () => {
+            popup.startAuth(true);
+        },
+        emailClear: () => {
+            $scope.email = '';
+        },
+        deleteLinkFrom: val => {
+            var index = $scope.links.from.indexOf(val);
+            if (index !== -1) {
+                bg.app.deleteLinkFrom(index);
+            }
+        },
+        deleteLinkTo: val => {
+            var index = $scope.links.to.indexOf(val);
+            if (index !== -1) {
+                bg.app.deleteLinkTo(index);
+            }
+        },
+        openURL: url => {
+            chrome.tabs.create({
+                url: url
+            });
+        },
+        clickedLinkFrom: val => {
+            popup.openURL(val.link.url);
+            bg.app.updateLinkOpened(val);
+        },
+        clickedLinkTo: val => {
+            popup.openURL(val.link.url);
+        },
         initUI: () => {
             popup.setupEmailSuggestion();
+            popup.showTab(0);
+
+            $scope.send = popup.send;
+            $scope.signIn = popup.signIn;
+            $scope.emailClear = popup.emailClear;
+            $scope.showTab = popup.showTab;
+            $scope.contactClicked = popup.contactClicked;
+
+            $scope.clickedLinkFrom = popup.clickedLinkFrom;
+            $scope.clickedToFrom = popup.clickedLinkTo;
+            $scope.deleteLinkFrom = popup.deleteLinkFrom;
+            $scope.deleteLinkTo = popup.deleteLinkTo;
+        },
+        attachToBackground: () => {
+            bg.app.refreshToken();
+            bg.app.popup = popup;
+            // connecting to background script
+            // background script will receive event
+            // on popup close
+            chrome.runtime.connect({
+                name: 'popup'
+            });
         },
         init: () => {
-            bg.app.refreshToken();
+            popup.attachToBackground();
             popup.initUI();
             popup.initFirebase();
             if ($scope.signedIn) {
@@ -246,31 +295,12 @@ app.controller('popup-controller', function ($scope, $window) {
 });
 
 app.controller('contacts-controller', function ($scope) {
-    $scope.contacts = bg.app.contacts;
     $scope.contactsMax = 10;
     $scope.selectedContactIndex = 0;
 
     $scope.loadMore = function () {
         $scope.contactsMax += 10;
     }
-    $scope.printIndex = (index) => {
-        console.log(index);
-    }
-
-    /*const keys = {
-        UP: 38,
-        DOWN: 40
-    };
-
-    document.onkeydown = e => {
-        e = e || window.event;
-        switch (e.keyCode) {
-            case keys.UP:
-                break;
-            case keys.DOWN:
-                break;
-        }
-    }*/
 })
 
 app.controller('tab-controller', function ($scope) {
@@ -301,16 +331,31 @@ app.directive('postRepeatDirective', function () {
 });
 app.filter('searchContact', function () {
     return function (arr, searchstr) {
-        var res = [];
-
-        if (searchstr === undefined ||
-            searchstr === '')
+        if (!searchstr)
             return arr;
 
-        searchstr = searchstr.toLowerCase();
+        var res = [];
         angular.forEach(arr, function (c) {
             if (c.name.contains(searchstr) ||
                 c.email.contains(searchstr)) {
+                res.push(c);
+            }
+        })
+
+        return res;
+    }
+})
+app.filter('searchLink', function () {
+    return function (arr, searchstr) {
+        if (!searchstr)
+            return arr;
+
+        var res = [];
+        angular.forEach(arr, function (c) {
+            if (c.link.title.contains(searchstr) ||
+                c.link.url.contains(searchstr) ||
+                (c.from && c.from.contains(searchstr)) ||
+                (c.to && c.to.contains(searchstr))) {
                 res.push(c);
             }
         })
@@ -351,6 +396,21 @@ app.directive("whenScrolled", function () {
         }
     }
 });
+
+app.filter('orderObjectBy', function () {
+    return function (items, field, reverse) {
+        var filtered = [];
+        angular.forEach(items, function (item, key) {
+            filtered.push(item);
+        });
+        filtered.sort(function (a, b) {
+            return (a[field] > b[field] ? 1 : -1);
+        });
+        if (reverse) filtered.reverse();
+        return filtered;
+    };
+});
+
 
 
 
