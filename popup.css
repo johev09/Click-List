@@ -162,8 +162,13 @@ a:link {
 }
 
 .search-btn {
-    padding: 0 10px;
-    cursor: button;
+    padding: 5px;
+    cursor: pointer;
+    color: gainsboro;
+    font-size: 14pt;
+}
+.search-btn:hover {
+    color: yellowgreen;
 }
 
 #links-wrapper {
@@ -498,6 +503,8 @@ button i {
 
 .list-item-div .list-item-div-content {
     padding: 5px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .list-item-div.open-comments,
@@ -722,8 +729,8 @@ button i {
 
 .comment-line {
     font-size: 10pt;
+    padding-left: 10px !important;
 }
-
 
 .search-input {
     flex: 1;
@@ -739,6 +746,29 @@ button i {
     outline: none;
     font-family: Montserrat;
     color: inherit;
-    padding: 5px;
+    /*    padding: 5px;*/
     /*    border-bottom: 2px solid dodgerblue;*/
+}
+
+
+/****** SCROLLBAR *********/
+
+*::-webkit-scrollbar {
+    width: 7px;
+}
+
+*::-webkit-scrollbar-button {
+    display: none;
+}
+ 
+*::-webkit-scrollbar-track {
+/*    -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3);*/
+    background: transparent;
+}
+ 
+*::-webkit-scrollbar-thumb {
+  background-color: lavender;
+    border-radius: 3px;
+/*  outline: 1px solid slategrey;*/
+    outline: none;
 }

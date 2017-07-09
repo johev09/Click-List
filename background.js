@@ -43,10 +43,29 @@ var app = {
         app.saveToLocalStorage('quickContacts', app.quickContacts)
             .then(app.initContextMenus);
     },
+    clickedContextMenuOption: (email, url) => {
+        /*// Opens Popup.html in new tab
+        window.open(chrome.extension.getURL('popup.html'),
+    "_blank", "width=550,height=200,location=0,resizable=0")*/
+
+        app.getMetaFromURL(url)
+            .then(meta => {
+                var link = {
+                    from: app.user.email,
+                    to: email,
+                    title: meta.title,
+                    url: meta.url,
+                    favicon: meta.favicon,
+                    received: false,
+                    opened: false
+                };
+                app.send(link, email);
+            })
+            .catch(app.printError);
+    },
     initContextMenus: () => {
         console.log("creating context menus...");
         chrome.contextMenus.removeAll();
-        var reverse = app.quickContacts.slice().reverse();
         app.quickContacts
             .slice()
             .reverse()
@@ -55,26 +74,47 @@ var app = {
                 chrome.contextMenus.create({
                     title: profile.name,
                     contexts: ["link"],
-                    onclick: function (info, tab) {
-                        // Opens Popup.html in new tab
-                        //                window.open(chrome.extension.getURL('popup.html'),
-                        //                        "_blank", "width=550,height=200,location=0,resizable=0")
-
-                        app.getCurrentTab()
-                            .then(tab => console.log(tab));
-                        /*var link = {
-                            from: from,
-                            to: to,
-                            title: $scope.tab.title,
-                            url: $scope.tab.url,
-                            favicon: $scope.tab.favicon,
-                            received: false,
-                            opened: false
-                        };
-                        app.send(profile.email, info.linkUrl)*/
+                    onclick: (info, tab) => {
+                        app.clickedContextMenuOption(email, info.linkUrl);
                     }
                 });
             })
+    },
+
+    openGraphAPI: {
+        URL: 'https://opengraph.io/api/1.0/site/',
+        Key: '5961d07407efcb0b00a6ce71'
+    },
+    getMetaFromURL: url => {
+        return new Promise((resolve, reject) => {
+            console.log("getting meta data of", url);
+            var getURL = app.openGraphAPI.URL + encodeURIComponent(url);
+            $.get(getURL, {
+                    "app_id": app.openGraphAPI.Key
+                })
+                .done(res => {
+                    if (res && res.hybridGraph) {
+                        var title, favicon;
+                        if (res.hybridGraph.title) {
+                            title = res.hybridGraph.title;
+                        }
+                        if (res.hybridGraph.favicon) {
+                            favicon = res.hybridGraph.favicon;
+                        }
+
+                        var meta = {
+                            title: title,
+                            favicon: favicon,
+                            url: url
+                        };
+                        resolve(meta);
+                        console.log("got meta data!", meta);
+                    } else {
+                        reject("no hybridGraph on success response: " + url);
+                    }
+                })
+                .fail(() => reject("failed to get metadata: " + url));
+        });
     },
     getCurrentTab: () => {
         return new Promise(function (resolve, reject) {
@@ -135,15 +175,15 @@ var app = {
         app.getFromLocalStorage('lastFromTimestamp')
             .then(timestamp => app.lastFromTimestamp = timestamp);
     },
-    setLastFromTimestamp: (from) => {
-        if (from.timstamp > app.lastFromTimestamp && !app.isPopupOpen()) {
-            app.unreadCount += 1;
-            app.showUnreadBadge();
-            app.notifyLink(from);
+    setLastFromTimestamp: from => {
+        if ((from.timestamp > app.lastFromTimestamp)) {
+            app.lastFromTimestamp = from.timestamp;
+            if (!app.isPopupOpen()) {
+                app.unreadCount += 1;
+                app.showUnreadBadge();
+                app.notifyLink(from);
+            }
         }
-
-        app.lastFromTimestamp = from.timstamp;
-        app.saveToLocalStorage('lastFromTimestamp', app.lastFromTimestamp);
     },
     showUnreadBadge: () => {
         chrome.browserAction.setBadgeText({
@@ -151,9 +191,20 @@ var app = {
         });
     },
     hideUnreadBadge: () => {
+        app.saveToLocalStorage('lastFromTimestamp', app.lastFromTimestamp);
+
         chrome.browserAction.setBadgeText({
             text: ''
         });
+    },
+
+    yupButton: {
+        title: "Check out!",
+        iconUrl: "./img/happy.png"
+    },
+    nopeButton: {
+        title: "Later...",
+        iconUrl: "./img/bored.png"
     },
     chime: new Audio('chime.mp3'),
     notifications: {},
@@ -163,25 +214,20 @@ var app = {
                 var link = app.links[from.linkKey],
                     profile = app.getProfile(from.from);
 
-                var title = profile.name,
-                    message = link.title,
-                    iconUrl = profile.picture;
+                console.log("notifying.... ", link, profile);
+
+                var iconUrl = profile.picture ? profile.picture : 'pointing.png';
                 chrome.notifications.create(null, {
                     type: "basic",
-                    title: link.title,
-                    message: message,
+                    title: 'NEW LINK!!!',
+                    message: link.title,
                     contextMessage: link.url,
                     iconUrl: iconUrl,
-                    buttons: [{
-                        title: "Check it out!",
-                        iconUrl: "happy.png"
-                    }, {
-                        title: "Later...",
-                        iconUrl: "bored.png"
-                    }]
+                    buttons: [app.yupButton, app.nopeButton]
                 }, function (id) {
-                    notifications[id] = link.url;
-                    chime.play();
+                    console.log("notified!", link, profile);
+                    app.notifications[id] = link.url;
+                    app.chime.play();
                 });
             });
     },
@@ -193,6 +239,7 @@ var app = {
         app.closedNotification(notifid);
     },
     clickedNotificationButton: (notifid, btnIndex) => {
+        console.log("clicked", notifid, btnIndex);
         if (btnIndex === 0 &&
             notifid in app.notifications) {
             app.openURL(app.notifications[notifid]);
@@ -210,6 +257,7 @@ var app = {
         chrome.notifications.onClosed.addListener(app.closedNotification);
     },
     openURL: url => {
+        console.log("opening tab", url);
         chrome.tabs.create({
             url: url
         });
@@ -434,38 +482,42 @@ var app = {
         }
     },
     addLink: linkKey => {
-        if (!(linkKey in app.links)) {
-            var linksRefKey = app.getLinksRefKey();
-            var linkRef = firebase.database().ref(linksRefKey + '/' + linkKey);
+        return new Promise((resolve, reject) => {
+            if (!(linkKey in app.links)) {
+                var linksRefKey = app.getLinksRefKey();
+                var linkRef = firebase.database().ref(linksRefKey + '/' + linkKey);
 
-            /*linkRef.once('value', snapshot => {
-                app.links[linkKey] = snapshot.val();
-                console.log("added link", linkKey, snapshot.val());
+                app.links[linkKey] = {};
+                linkRef.once('value', snapshot => {
+                    app.links[linkKey] = snapshot.val();
+                    console.log("added link", linkKey, snapshot.val());
+                    resolve();
 
-                if (app.links[linkKey].to == app.user.email) {
-                    app.receivedLink(linkKey);
-                }
-            });*/
-            app.links[linkKey] = {};
-            linkRef.on('child_added', data => {
-                app.links[linkKey][data.key] = data.val();
-                console.log("added link child", linkKey, data.key, data.val());
-            });
-            linkRef.on('child_changed', data => {
-                app.links[linkKey][data.key] = data.val();
-                console.log("changed link child", linkKey, data.key, data.val());
-            });
-            linkRef.on('child_removed', data => {
-                app.links[linkKey][data.key] = null;
-                console.log("removed link child", linkKey, data.key, data.val());
+                    if (app.links[linkKey].to == app.user.email) {
+                        app.receivedLink(linkKey);
+                    }
 
-                // if both from and to is deleted remove link
-                if (!app.links[linkKey].from &&
-                    !app.links[linkKey].to) {
-                    app.removeLink(linkKey);
-                }
-            });
-        }
+                    linkRef.on('child_added', data => {
+                        app.links[linkKey][data.key] = data.val();
+                        console.log("added link child", linkKey, data.key, data.val());
+                    });
+                });
+                linkRef.on('child_changed', data => {
+                    app.links[linkKey][data.key] = data.val();
+                    console.log("changed link child", linkKey, data.key, data.val());
+                });
+                linkRef.on('child_removed', data => {
+                    app.links[linkKey][data.key] = null;
+                    console.log("removed link child", linkKey, data.key, data.val());
+
+                    // if both from and to is deleted remove link
+                    if (!app.links[linkKey].from &&
+                        !app.links[linkKey].to) {
+                        app.removeLink(linkKey);
+                    }
+                });
+            }
+        });
     },
     removeLink: linkKey => {
         var linkRefKey = app.getLinksRefKey() + '/' + linkKey,
@@ -488,9 +540,8 @@ var app = {
     addedFrom: data => {
         var from = app.serialize(data);
         app.from.push(from);
-        app.addLink(from.linkKey);
-
-        app.setLastFromTimestamp(from);
+        app.addLink(from.linkKey)
+            .then(() => app.setLastFromTimestamp(from));
         console.log("added from", from);
     },
     removedFrom: data => {

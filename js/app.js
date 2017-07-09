@@ -246,7 +246,7 @@ app.controller('popup-controller', function ($scope, $window) {
         },
         emailClear: () => {
             $scope.email = '';
-            $scope.$apply();
+            $scope.$digest();
         },
         deleteFrom: from => {
             bg.app.deleteFrom(from);
@@ -475,9 +475,7 @@ app.directive("whenScrolled", function () {
 });
 app.directive('focusOn', ($parse) => {
     return (scope, element, attrs) => {
-
         scope.$watch(attrs.focusOn, focus => {
-            console.log("focuse: ", focus);
             if (focus) {
                 setTimeout(() => element.focus());
             }
