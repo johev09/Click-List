@@ -12,46 +12,293 @@ firebase.initializeApp(config);
 var app = {
     signedIn: false,
     user: {},
-    links: {
-        fromKeys: [],
-        from: [],
-        to: [],
-        toKeys: []
-    },
+    from: [],
+    to: [],
+    links: {},
     token: null,
-    popup: null,
     emailToContact: {},
     contacts: [],
     retryTimeout: 2000,
+
+    /******** QUICK CONTACTS *********/
+    quickContacts: [],
+    quickContactsMax: 5,
+    initQuickContacts: () => {
+        app.getFromLocalStorage('quickContacts')
+            .then(quickContacts => {
+                if (quickContacts) {
+                    app.quickContacts = quickContacts;
+                    app.initContextMenus();
+                }
+            });
+    },
+    addToQuickContact: email => {
+        var index = app.quickContacts.indexOf(email);
+        if (index !== -1) {
+            app.quickContacts.splice(index, 1);
+        }
+        app.quickContacts.push(email);
+        app.quickContacts.splice(0, app.quickContacts.length - app.quickContactsMax);
+
+        app.saveToLocalStorage('quickContacts', app.quickContacts)
+            .then(app.initContextMenus);
+    },
+    initContextMenus: () => {
+        console.log("creating context menus...");
+        chrome.contextMenus.removeAll();
+        var reverse = app.quickContacts.slice().reverse();
+        app.quickContacts
+            .slice()
+            .reverse()
+            .forEach(function (email) {
+                var profile = app.getProfile(email);
+                chrome.contextMenus.create({
+                    title: profile.name,
+                    contexts: ["link"],
+                    onclick: function (info, tab) {
+                        // Opens Popup.html in new tab
+                        //                window.open(chrome.extension.getURL('popup.html'),
+                        //                        "_blank", "width=550,height=200,location=0,resizable=0")
+
+                        app.getCurrentTab()
+                            .then(tab => console.log(tab));
+                        /*var link = {
+                            from: from,
+                            to: to,
+                            title: $scope.tab.title,
+                            url: $scope.tab.url,
+                            favicon: $scope.tab.favicon,
+                            received: false,
+                            opened: false
+                        };
+                        app.send(profile.email, info.linkUrl)*/
+                    }
+                });
+            })
+    },
+    getCurrentTab: () => {
+        return new Promise(function (resolve, reject) {
+            chrome.tabs.query({
+                active: true, // Select active tabs
+                currentWindow: true // In the current window
+            }, function (tabs) {
+                resolve(tabs[0]);
+            });
+        }).then(tab => {
+            var favIcon;
+            if (tab.favIconUrl && tab.favIconUrl != '' &&
+                tab.favIconUrl.indexOf('chrome://favicon/') == -1) {
+                // favicon appears to be a normal url
+                favIcon = tab.favIconUrl;
+            } else {
+                // couldn't obtain favicon as a normal url, try chrome://favicon/url
+                favIcon = 'chrome://favicon/' + link;
+            }
+
+            return {
+                title: tab.title,
+                url: tab.url,
+                favIcon: favIcon
+            };
+        });
+    },
+
+    /******* LOCALSTORAGE UTILS *******/
+    saveToLocalStorage: (key, value) => {
+        return new Promise((resolve, reject) => {
+            var save = {};
+            save[key] = value;
+            chrome.storage.local.set(save, () => {
+                console.log(key + ' saved to LS!', value);
+                resolve();
+            });
+        });
+    },
+    getFromLocalStorage: key => {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.get(key, items => {
+                var value = null;
+                if (key in items) {
+                    value = items[key];
+                }
+
+                console.log(key + ' got from LS!', value);
+                resolve(value);
+            });
+        });
+    },
+
+    /****** UNREAD NOTIFICATION ******/
+    lastFromTimestamp: 0,
+    unreadCount: 0,
+    initLastFromTimestamp: () => {
+        app.getFromLocalStorage('lastFromTimestamp')
+            .then(timestamp => app.lastFromTimestamp = timestamp);
+    },
+    setLastFromTimestamp: (from) => {
+        if (from.timstamp > app.lastFromTimestamp && !app.isPopupOpen()) {
+            app.unreadCount += 1;
+            app.showUnreadBadge();
+            app.notifyLink(from);
+        }
+
+        app.lastFromTimestamp = from.timstamp;
+        app.saveToLocalStorage('lastFromTimestamp', app.lastFromTimestamp);
+    },
+    showUnreadBadge: () => {
+        chrome.browserAction.setBadgeText({
+            text: '' + app.unreadCount
+        });
+    },
+    hideUnreadBadge: () => {
+        chrome.browserAction.setBadgeText({
+            text: ''
+        });
+    },
+    chime: new Audio('chime.mp3'),
+    notifications: {},
+    notifyLink: from => {
+        app.refreshToken()
+            .then(token => {
+                var link = app.links[from.linkKey],
+                    profile = app.getProfile(from.from);
+
+                var title = profile.name,
+                    message = link.title,
+                    iconUrl = profile.picture;
+                chrome.notifications.create(null, {
+                    type: "basic",
+                    title: link.title,
+                    message: message,
+                    contextMessage: link.url,
+                    iconUrl: iconUrl,
+                    buttons: [{
+                        title: "Check it out!",
+                        iconUrl: "happy.png"
+                    }, {
+                        title: "Later...",
+                        iconUrl: "bored.png"
+                    }]
+                }, function (id) {
+                    notifications[id] = link.url;
+                    chime.play();
+                });
+            });
+    },
+    clickedNotification: notifid => {
+        if (notifid in app.notifications) {
+            app.openURL(app.notifications[notifid]);
+        }
+
+        app.closedNotification(notifid);
+    },
+    clickedNotificationButton: (notifid, btnIndex) => {
+        if (btnIndex === 0 &&
+            notifid in app.notifications) {
+            app.openURL(app.notifications[notifid]);
+        }
+
+        app.closedNotification(notifid);
+    },
+    closedNotification: (notifid, byuser) => {
+        chrome.notifications.clear(notifid);
+        delete notifications[notifid]
+    },
+    initChromeNotificationListeners: () => {
+        chrome.notifications.onClicked.addListener(app.clickedNotification);
+        chrome.notifications.onButtonClicked.addListener(app.clickedNotificationButton);
+        chrome.notifications.onClosed.addListener(app.closedNotification);
+    },
+    openURL: url => {
+        chrome.tabs.create({
+            url: url
+        });
+    },
+
+    /****** PROFILE & CONTACT ******/
+    defaultProfilePicture: './img/bored.png',
+    unknownProfilePicture: './img/who.png',
+    getProfile: email => {
+        var name, email, picture;
+        if (email == app.user.email) {
+            name = app.user.displayName;
+            email = app.user.email;
+            picture = app.user.photoURL;
+        } else if (email in app.emailToContact) {
+            var contact = app.emailToContact[email];
+            name = contact.name;
+            email = contact.email;
+            picture = (contact.src === null ? null : contact.src +
+                "&access_token=" + app.token);
+        } else {
+            name = email;
+            email = email;
+            picture = app.unknownProfilePicture;
+        }
+        return {
+            name: name,
+            email: email,
+            picture: picture
+        };
+    },
     processContacts: (entries) => {
         console.log("processing contacts response...");
         entries.forEach(function (entry) {
-            if (entry.hasOwnProperty("gd$email")) {
-                var email = entry.gd$email[0].address,
+            if (entry.gd$email) {
+                var etag = entry.gd$etag,
+                    contactID = null,
+                    email = entry.gd$email[0].address,
                     name = null,
-                    src = null;
+                    src = null,
+                    phoneNumber = [];
 
-                if ("gd$name" in entry) {
+                // contactID
+                if (entry.id && entry.id.$t) {
+                    var id = entry.id.$t;
+                    contactID = id.substr(id.lastIndexOf('/') + 1);
+                }
+
+                // name
+                if (entry.gd$name &&
+                    entry.gd$name.gd$fullName &&
+                    entry.gd$name.gd$fullName.$t) {
                     name = entry.gd$name.gd$fullName.$t;
                 }
 
-                var links = entry.link;
-                links.some(function (link) {
-                    if (link.type === "image/*") {
-                        if ("gd$etag" in link) {
-                            src = link.href; // + "&access_token=" + token;
+                // picture
+                if (entry.link) {
+                    entry.link.some(link => {
+                        if (link.rel && link.rel === 'http://schemas.google.com/contacts/2008/rel#photo' &&
+                            link.type && link.type === 'image/*') {
+                            if (link.gd$etag) {
+                                src = link.href;
+                            }
+                            return true;
                         }
-                        return true;
-                    }
-                    return false;
-                });
+                        return false;
+                    });
+                }
+
+                //phone number
+                if (entry.gd$phoneNumber) {
+                    entry.gd$phoneNumber.forEach(number => {
+                        if (number.rel &&
+                            number.rel === 'http://schemas.google.com/g/2005#mobile' &&
+                            number.$t) {
+                            phoneNumber.push(number.$t);
+                        }
+                    });
+                }
 
                 if (!(email in app.emailToContact)) {
                     var contact = {
+                        etag: etag,
+                        contactID: contactID,
                         email: email,
                         name: name === null ? email : name,
                         src: src,
-                        color: "dodgerblue"
+                        color: "dodgerblue",
+                        phoneNumber: phoneNumber
                     };
                     app.emailToContact[email] = contact;
                     app.contacts.push(contact);
@@ -91,16 +338,21 @@ var app = {
         xhr.send(null);
     },
     refreshToken: () => {
-        app.getToken()
-            .then(token => app.token = token)
-            .catch(app.printError);;
+        return app.getToken()
+            .then(token => {
+                app.token = token;
+                return app.token;
+            });
+        //            .catch(app.printError);
     },
-    getToken: (cb) => {
+    getToken: () => {
         return new Promise((resolve, reject) => {
             chrome.identity.getAuthToken({
                 interactive: false
             }, (token) => {
-                if (token) {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                } else if (token) {
                     resolve(token);
                 } else {
                     reject("failed to get token");
@@ -108,61 +360,206 @@ var app = {
             });
         });
     },
-    getUserIdFromEmail: (email) => {
-        return email.slice(0, email.indexOf('@'));
+
+    /******* FIREBASE STUFF ********/
+    getUserIdFromEmail: email => {
+        var specialChars = ['\\.', '#', '\\$', '\\/', '\\[', '\\]'],
+            sanitized = email;
+        specialChars.forEach(char => {
+            var re = new RegExp(char, 'g');
+            sanitized = sanitized.replace(re, '');
+        })
+        var userId = sanitized.slice(0, sanitized.indexOf('@'));
+        return userId;
     },
-    getLinksRefKey: (email) => {
-        return '/users/' + app.getUserIdFromEmail(email) +
-            '/links';
+    getLinksRefKey: () => {
+        return '/links';
     },
-    getFromLinksRefKey: (email) => {
-        return app.getLinksRefKey(email) + '/from'
+    getFromRefKey: email => {
+        return '/froms/' + app.getUserIdFromEmail(email);
     },
-    getToLinksRefKey: (email) => {
-        return app.getLinksRefKey(email) + '/to'
+    getToRefKey: email => {
+        return '/tos/' + app.getUserIdFromEmail(email);
     },
-    deleteLinkFrom: index => {
-        var val = app.links.from[index];
-        var key = app.links.fromKeys[index];
-        console.log("deleting link from...", val);
-        var linkRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key;
-        firebase.database().ref(linkRefKey)
-            .remove()
-            .then(() => console.log("successfully deleted link from", val))
+    getRefKeyComments: linkKey => {
+        return app.getLinksRefKey() +
+            '/' + linkKey + '/comments';
+    },
+
+
+    deleteFrom: from => {
+        console.log("deleting link from...", from);
+        var fromRefKey = app.getFromRefKey(app.user.email) + '/' + from.key;
+        var linkFromRefKey = app.getLinksRefKey() + '/' + from.linkKey + '/from';
+
+        var updates = {};
+        updates[fromRefKey] = null;
+        updates[linkFromRefKey] = null;
+        firebase.database().ref()
+            .update(updates)
+            .then(() => console.log("deleted link from!", from))
             .catch(app.printError);
     },
-    deleteLinkTo: index => {
-        var val = app.links.to[index];
-        var key = app.links.toKeys[index];
-        console.log("deleting link to...", val);
-        var linkRefKey = app.getToLinksRefKey(app.user.email) + '/' + key;
-        firebase.database().ref(linkRefKey)
-            .remove()
-            .then(() => console.log("successfully deleted link to", val))
+    deleteTo: to => {
+        console.log("deleting link from...", to);
+        var toRefKey = app.getToRefKey(app.user.email) + '/' + to.key;
+        var linkToRefKey = app.getLinksRefKey() + '/' + to.linkKey + '/to';
+
+        var updates = {};
+        updates[toRefKey] = null;
+        updates[linkToRefKey] = null;
+        firebase.database().ref()
+            .update(updates)
+            .then(() => console.log("deleted link to!", to))
             .catch(app.printError);
+    },
+    openedLink: linkKey => {
+        if (!app.links[linkKey].opened) {
+            console.log('updating opened', linkKey);
+            var refkey = app.getLinksRefKey() + '/' + linkKey + '/opened';
+
+            firebase.database().ref(refkey)
+                .set(true)
+                .catch(app.printError);
+        }
+    },
+    receivedLink: linkKey => {
+        if (!app.links[linkKey].received) {
+            console.log('updating received', linkKey);
+            var refKey = app.getLinksRefKey() + '/' + linkKey + '/received';
+
+            firebase.database().ref(refKey)
+                .set(true)
+                .catch(app.printError);
+        }
+    },
+    addLink: linkKey => {
+        if (!(linkKey in app.links)) {
+            var linksRefKey = app.getLinksRefKey();
+            var linkRef = firebase.database().ref(linksRefKey + '/' + linkKey);
+
+            /*linkRef.once('value', snapshot => {
+                app.links[linkKey] = snapshot.val();
+                console.log("added link", linkKey, snapshot.val());
+
+                if (app.links[linkKey].to == app.user.email) {
+                    app.receivedLink(linkKey);
+                }
+            });*/
+            app.links[linkKey] = {};
+            linkRef.on('child_added', data => {
+                app.links[linkKey][data.key] = data.val();
+                console.log("added link child", linkKey, data.key, data.val());
+            });
+            linkRef.on('child_changed', data => {
+                app.links[linkKey][data.key] = data.val();
+                console.log("changed link child", linkKey, data.key, data.val());
+            });
+            linkRef.on('child_removed', data => {
+                app.links[linkKey][data.key] = null;
+                console.log("removed link child", linkKey, data.key, data.val());
+
+                // if both from and to is deleted remove link
+                if (!app.links[linkKey].from &&
+                    !app.links[linkKey].to) {
+                    app.removeLink(linkKey);
+                }
+            });
+        }
+    },
+    removeLink: linkKey => {
+        var linkRefKey = app.getLinksRefKey() + '/' + linkKey,
+            linkRef = firebase.database().ref(linkRefKey);
+
+        linkRef.off();
+        linkRef.remove()
+            .then(() => {
+                delete app.links[linkKey];
+                console.log("link removed", linkKey);
+            })
+            .catch(app.printError)
+    },
+    serialize: data => {
+        return Object.assign({}, data.val(), {
+            key: data.key,
+            openComments: false
+        });
+    },
+    addedFrom: data => {
+        var from = app.serialize(data);
+        app.from.push(from);
+        app.addLink(from.linkKey);
+
+        app.setLastFromTimestamp(from);
+        console.log("added from", from);
+    },
+    removedFrom: data => {
+        var removed = app.from.filter(from => {
+            return from.key !== data.key;
+        });
+        Array.prototype.splice.apply(app.from, [0, app.from.length].concat(removed));
+
+        console.log("removed from", data.val());
+    },
+    addedTo: data => {
+        var to = app.serialize(data);
+        app.to.push(to);
+        app.addLink(to.linkKey);
+        console.log("added to", to);
+    },
+    removedTo: data => {
+        var removed = app.to.filter(to => {
+            return to.key !== data.key;
+        });
+        Array.prototype.splice.apply(app.to, [0, app.to.length].concat(removed));
+
+        console.log("removed to", data.val());
+    },
+    setLinksListener: () => {
+        var fromRefKey = app.getFromRefKey(app.user.email),
+            fromRef = firebase.database().ref(fromRefKey);
+        fromRef.on('child_added', app.addedFrom);
+        //        fromRef.on('child_changed', app.updatedFrom);
+        fromRef.on('child_removed', app.removedFrom);
+
+        var toRefKey = app.getToRefKey(app.user.email),
+            toRef = firebase.database().ref(toRefKey);
+        toRef.on('child_added', app.addedTo);
+        //        toRefKey.on('child_changed', app.updatedTo);
+        toRef.on('child_removed', app.removedTo);
     },
     send: (link, email) => {
         return new Promise((resolve, reject) => {
             if (app.signedIn) {
-                var fromLinksRefkey = app.getFromLinksRefKey(email)
-                var toLinksRefkey = app.getToLinksRefKey(app.user.email);
+                console.log("sending link...", link, "...to...", email);
+                var linksRefKey = app.getLinksRefKey();
+                var linkKey = firebase.database()
+                    .ref(linksRefKey)
+                    .push().key;
 
-                var fromLinksKey = firebase.database().ref(fromLinksRefkey).push().key;
-                var toLinksKey = fromLinksKey;
-                //                var toLinksKey = firebase.database().ref(toLinksRefkey).push().key;
+                var fromRefkey = app.getFromRefKey(email);
+                var toRefkey = app.getToRefKey(app.user.email);
+
+                var fromKey = firebase.database()
+                    .ref(fromRefkey)
+                    .push().key;
+                var toKey = firebase.database()
+                    .ref(toRefkey)
+                    .push().key;
 
                 var timestamp = new Date().getTime();
 
                 var updates = {};
-                updates[fromLinksRefkey + '/' + fromLinksKey] = {
+                updates[linksRefKey + '/' + linkKey] = link;
+                updates[fromRefkey + '/' + fromKey] = {
                     timestamp: timestamp,
                     from: app.user.email,
-                    link: link
+                    linkKey: linkKey
                 };
-                updates[toLinksRefkey + '/' + toLinksKey] = {
+                updates[toRefkey + '/' + toKey] = {
                     timestamp: timestamp,
                     to: email,
-                    link: link
+                    linkKey: linkKey
                 };
 
                 firebase.database().ref()
@@ -174,119 +571,74 @@ var app = {
             }
         })
     },
+    addComment: (linkKey, comment) => {
+        console.log("adding comment...", comment,
+            "to", app.links[linkKey]);
 
-    updateLink: (key, val) => {
-        var fromRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key + '/link';
-        var toRefKey = app.getToLinksRefKey(val.from) + '/' + key + '/link';
+        var commentsRefKey = app.getRefKeyComments(linkKey),
+            commentKey = firebase.database().ref(commentsRefKey).push().key;
+        // putting key in data
+        // since will need it in ng-repeat
+        firebase.database()
+            .ref(commentsRefKey + '/' + commentKey)
+            .set({
+                timestamp: new Date().getTime(),
+                commenter: app.user.email,
+                comment: comment,
+                key: commentKey
+            })
+            .catch(app.printError);
+    },
+    deleteComment: (linkKey, commentKey) => {
+        console.log("deleting comment...", commentKey, "of link", linkKey, );
+        var commentRefKey = app.getRefKeyComments(linkKey) + '/' + commentKey;
+        firebase.database()
+            .ref(commentRefKey)
+            .remove()
+            .catch(app.printError);
+    },
 
-        var updates = {};
-        updates[fromRefKey] = val.link;
-        updates[toRefKey] = val.link;
-        return firebase.database().ref().update(updates)
+    /******* CONNECT ********/
+    popup: null,
+    isPopupOpen: () => {
+        return app.popup !== null;
     },
-    updateLinkOpened: val => {
-        if (!val.link.opened) {
-            console.log("updating link opened...", val);
-            var index = app.links.from.indexOf(val);
-            if (index !== -1) {
-                var key = app.links.fromKeys[index];
+    onMessage: msg => {},
+    onConnect: port => {
+        if (port.name == 'popup') {
+            port.onDisconnect.addListener(app.onDisconnect);
+            port.onMessage.addListener(app.onMessage);
+        }
+        //        console.log("connected", port);
+    },
+    onDisconnect: port => {
+        if (port.name == 'popup') {
+            app.popup = null;
+            app.from.forEach(from => from.openComments = false);
+            app.from.forEach(to => to.openComments = false);
+        }
+        //        console.log("disconnected", port);
+    },
 
-                val.link.opened = true;
-                app.updateLink(key, val)
-                    .then(() => console.log("updated opened!", val))
-                    .catch(app.printError);
-            }
-        }
+    /********* UTILS **********/
+    printError: err => {
+        console.error(err);
     },
-    updateLinkRecevied: data => {
-        if (!data.val().link.received) {
-            var key = data.key;
-            var val = data.val();
-            var fromRefKey = app.getFromLinksRefKey(app.user.email) + '/' + key + '/link';
-            var toRefKey = app.getToLinksRefKey(val.from) + '/' + key + '/link';
 
-            val.link.received = true;
-            var updates = {};
-            updates[fromRefKey] = val.link;
-            updates[toRefKey] = val.link;
-            firebase.database().ref()
-                .update(updates)
-                .then(() => console.log("received updated", val))
-                .catch(app.printError);
-        }
-    },
-    addedLinksFrom: data => {
-        app.links.fromKeys.push(data.key);
-        app.links.from.push(data.val());
-        console.log("added from link", data.val());
-        // if first time received
-        // update received boolean
-        if (!data.val().link.received) {
-            app.updateLinkRecevied(data);
-        }
-    },
-    removedLinksFrom: data => {
-        var index = app.links.fromKeys.indexOf(data.key);
-        if (index !== -1) {
-            app.links.fromKeys.splice(index, 1);
-            app.links.from.splice(index, 1);
-            console.log("removed from link added", data.val());
-        }
-    },
-    addedLinksTo: data => {
-        app.links.toKeys.push(data.key);
-        app.links.to.push(data.val());
-        console.log("added to link", data.val());
-    },
-    removedLinksTo: data => {
-        var index = app.links.toKeys.indexOf(data.key);
-        if (index !== -1) {
-            app.links.toKeys.splice(index, 1);
-            app.links.to.splice(index, 1);
-            console.log("removed to link added", data.val());
-        }
-    },
-    updatedLinksFrom: data => {
-        var index = app.links.fromKeys.indexOf(data.key);
-        if (index !== -1) {
-            app.links.from[index] = data.val();
-            console.log("updated link from", data.val());
-        }
-    },
-    updatedLinksTo: data => {
-        var index = app.links.toKeys.indexOf(data.key);
-        if (index !== -1) {
-            app.links.to[index] = data.val();
-            console.log("updated link to", data.val());
-        }
-    },
-    setupLinksListener: () => {
-        var linksFromRefKey = app.getFromLinksRefKey(app.user.email);
-        var userLinksFromRef = firebase.database().ref(linksFromRefKey);
-        userLinksFromRef.on('child_added', app.addedLinksFrom);
-        userLinksFromRef.on('child_changed', app.updatedLinksFrom);
-        userLinksFromRef.on('child_removed', app.removedLinksFrom);
-
-        var linksToRefKey = app.getToLinksRefKey(app.user.email);
-        var userLinksToRef = firebase.database().ref(linksToRefKey);
-        userLinksToRef.on('child_added', app.addedLinksTo);
-        userLinksToRef.on('child_changed', app.updatedLinksTo);
-        userLinksToRef.on('child_removed', app.removedLinksTo);
-    },
-    printError: (err) => {
-        console.log(err);
-    },
-    init: () => {
+    /********* INIT ************/
+    initFirebase: () => {
         // Listen for auth state changes.
-        firebase.auth().onAuthStateChanged(function (user) {
+        firebase.auth().onAuthStateChanged(user => {
             if (user) {
-                app.signedIn = true;
                 app.user = user;
                 app.getToken()
-                    .then(app.getContacts)
+                    .then(token => {
+                        app.signedIn = true;
+                        app.getContacts(token);
+                    })
                     .catch(app.printError);
 
-                app.setupLinksListener();
+                app.setLinksListener();
             } else {
                 app.signedIn = false;
             }
@@ -294,25 +646,19 @@ var app = {
             console.log('User state change detected from the Background script of the Chrome Extension:', user);
         });
     },
-    onMessage: msg => {},
-    onConnect: port => {
-        /*if (port.name == 'popup') {
-            port.onDisconnect.addListener(app.onDisconnect);
-            port.onMessage.addListener(app.onMessage);
-        }
-
-        console.log("connected", port);*/
+    initChromeEvents: () => {
+        chrome.runtime.onConnect.addListener(app.onConnect);
+        app.initChromeNotificationListeners();
     },
-    onDisconnect: port => {
-        if (port.name == 'popup') {
-            app.popup = null;
-        }
+    init: () => {
+        app.initLastFromTimestamp();
+        app.initQuickContacts();
+        app.initChromeEvents();
 
-        console.log("disconnected", port);
+        app.initFirebase();
     }
 }
 app.init();
-chrome.runtime.onConnect.addListener(app.onConnect);
 
 var contact = {},
     contacts = [];

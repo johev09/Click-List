@@ -18,79 +18,112 @@
             <p class="profile-email"><small><i>{{profile.email}}</i></small></p>
         </div>
     </div>
+    <div class="quick-contact-wrapper vertical-center">
+        <span class="quick-contact link-simg-wrapper" ng-repeat="qc in quickContacts | reverse" ng-click="clickedQuickContact(qc)" ng-init="p = getProfile(qc)" title="Send Link to {{qc}}" post-repeat-directive>
+            <span class="initial">{{p.name[0] | uppercase}}</span>
+        <img ng-hide="p.picture === null" data-img-src="{{p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
+        </span>
+    </div>
     <div id="email-form">
         <form autocomplete="off" class="before" ng-class="{'not-empty' : email.length>0}" ng-submit="send()">
-            <input class="ui-widget" type="text" id="emailinput" placeholder="Start typing Email, Name for suggestions. Press Enter to Send" autofocus ng-model="email" />
+            <input class="ui-widget" type="text" id="emailinput" placeholder="Search or Type Email. Press Enter to Send..."autofocus ng-model="email"/>
+            
             <button type="button" class="email-clear" ng-show="email.length" ng-click="emailClear()"><i class="fa fa-times"></i></button>
-            <input id="emailsubmit" type="submit" value="submit" />
         </form>
     </div>
-    <div id="links">
-        <div id="tab" class="vertical-center" ng-controller="tab-controller">
-            <span id="tab-favicon">
+    <div id="tab" class="vertical-center" ng-controller="tab-controller">
+        <span id="tab-favicon">
                 <img ng-src="{{tab.favicon}}"/>
             </span>
-            <span id="tab-title">{{tab.title}}</span>
-            <span id="tab-url">{{tab.url}}</span>
-        </div>
-        <div id="search">
+        <span id="tab-title">{{tab.title}}</span>
+        <span id="tab-url">{{tab.url}}</span>
+    </div>
+    <div id="links">
+        <!--<div id="search">
             <span><i class="fa fa-search"></i> </span> <input ng-model="searchstr" type="text" placeholder=". . ." />
-        </div>
+        </div>-->
         <div id="links-tab">
-            <span ng-repeat="header in tabHeaders track by $index" class="links-tab-header" ng-class="{'selected' : $index == selectedTabIndex}" ng-click="showTab($index)">{{header}}</span>
-
-            <!--<span class="links-tab-header selected">Received</span>
-            <span class="links-tab-header">Sent</span>
-            <span class="links-tab-header">Contacts</span>-->
+            <span ng-repeat="header in tabHeaders track by $index" class="links-tab-header" ng-class="{'selected' : $index == selectedTabIndex}" ng-click="showTab($index)">{{header.name}} <sup style="color:black">({{header.obj.length}})</sup></span>
+            
+            <span class="search-btn vertical-center" ng-hide="openSearch" ng-click="openSearch=true"><i class="fa fa-search"></i></span>
+            <input type="text" placeholder=". . ." class='search-input' focus-on="openSearch" ng-show="openSearch" ng-model="searchstr" ng-blur="openSearch=false;searchstr=''"/>
         </div>
         <div id="links-wrapper">
             <div class="lw lw-received" ng-show="selectedTabIndex === 0">
-                <div class="list-item-div vertical-center" ng-repeat="val in links.from | searchLink: searchstr | orderBy: 'timestamp':true" ng-click="clickedLinkFrom(val)" post-repeat-directive>
-                    <span class="link-simg-wrapper">
-                        <span class="initial">{{emailToContact[val.from].name[0] | uppercase}}</span>
-                    <img ng-hide="c.src === null" data-img-src="{{ emailToContact[val.from].src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
-                    </span>
+                <div class="list-item-div" ng-repeat="f in from | searchLink: searchstr | orderBy: 'timestamp':true" ng-class="{'open-comments': f.openComments}" ng-init="p = getProfile(f.from); l = links[f.linkKey]" post-repeat-directive>
+                    <div class="vertical-center list-item-div-content">
+                        <span class="link-simg-wrapper">
+                        <span class="initial">{{p.name[0] | uppercase}}</span>
+                        <img ng-hide="p.picture === null" data-img-src="{{ p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                        </span>
 
-                    <div class="link-details">
-                        <p class="link-title">{{val.link.title}}</p>
-                        <p class="link-url"><small>{{val.link.url}}</small></p>
+                        <div class="link-details" ng-click="clickedLinkFrom(f)">
+                            <p class="link-title">{{l.title}}</p>
+                            <p class="link-url"><small>{{l.url}}</small></p>
+                        </div>
+
+                        <div class="link-actions">
+                            <span class="seen" ng-class="{'enable': l.opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
+                            <span class="comment" title="Comment" ng-click="openComments(f)" ng-class="{'enable':f.openComments}"><i class="fa fa-comments"></i></span>
+                            <span class="delete" title="Delete"><i class="fa fa-trash-o" ng-click="deleteFrom(f)"></i></span>
+                        </div>
                     </div>
-                    
-                    <div class="link-actions">
-                       <span class="seen" ng-class="{'enable': val.link.opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
-                       <span class="delete" title="Delete Link"><i class="fa fa-trash-o" ng-click="deleteLinkFrom(val)"></i></span>
+                    <div class="comments-container">
+                        <ul>
+                            <!--<li class="comment-wrapper">
+                                <p class="comment-email">johev09@gmail.com</p>
+                                <p class="comment-line">This is cool!</p>
+                            </li>-->
+                            <li class="comment-wrapper" ng-repeat="c in l.comments | orderObjectBy: 'timestamp'">
+                                <div class="comment-content">
+                                    <p class="comment-email">{{getProfile(c.commenter).name}}</p>
+                                    <p class="comment-line">{{c.comment}}</p>
+                                </div>
+                                <div class="comment-actions vertical-center">
+                                    <span class="delete" title="Delete"><i class="fa fa-trash-o" ng-click="deleteComment(f.linkKey, c.key)"></i></span>
+                                </div>
+                            </li>
+                            <li class="comment-wrapper">
+                                <form ng-submit="addComment(f.linkKey)">
+                                    <p class="comment-email">{{profile.name}}</p>
+                                    <p class="comment-line">
+                                        <input type="text" focus-on='f.openComments' ng-model='comment[f.linkKey]' placeholder=". . ." />
+                                    </p>
+                                </form>
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>
             <div class="lw lw-sent" ng-click="showSent()" ng-show="selectedTabIndex === 1">
-                <div class="list-item-div vertical-center" ng-repeat="val in links.to | searchLink: searchstr | orderBy: 'timestamp':true" ng-click="clickedLinkTo(val)" post-repeat-directive>
+                <div class="list-item-div vertical-center" ng-repeat="t in to | searchLink: searchstr | orderBy: 'timestamp':true" ng-click="clickedLinkTo(t)" post-repeat-directive>
                     <span class="link-simg-wrapper">
-                        <span class="initial">{{emailToContact[val.from].name[0] | uppercase}}</span>
-                    <img ng-hide="c.src === null" data-img-src="{{ emailToContact[val.to].src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                        <span class="initial">{{getProfile(t.to).name[0] | uppercase}}</span>
+                    <img ng-hide="getProfile(t.to).picture === null" data-img-src="{{ getProfile(t.to).picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
                     </span>
 
                     <div class="link-details">
-                        <p class="link-title">{{val.link.title}}</p>
-                        <p class="link-url"><small>{{val.link.url}}</small></p>
+                        <p class="link-title">{{links[t.linkKey].title}}</p>
+                        <p class="link-url"><small>{{links[t.linkKey].url}}</small></p>
                     </div>
-                    
+
                     <div class="link-actions">
-                       <span class="received" ng-class="{'enable': val.link.received}" title="Link Received"><i class="fa fa-check"></i></span>
-                       <span class="seen" ng-class="{'enable': val.link.opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
-                       <span class="delete" title="Delete Link"><i class="fa fa-trash-o" ng-click="deleteLinkTo(val)"></i></span>
+                        <span class="received" ng-class="{'enable': links[t.linkKey].received}" title="Link Received"><i class="fa fa-check"></i></span>
+                        <span class="seen" ng-class="{'enable': links[t.linkKey].opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
+                        <span class="delete" title="Delete Link"><i class="fa fa-trash-o" ng-click="deleteTo(t)"></i></span>
                     </div>
                 </div>
             </div>
             <div class="lw lw-contacts" ng-click="showContacts()" ng-show="selectedTabIndex === 2" ng-controller="contacts-controller" when-scrolled="loadMore()">
-                <div class="list-item-div vertical-center" ng-repeat="c in contacts | searchContact: searchstr | orderBy: 'name' | limitTo: contactsMax" ng-click="contactClicked(c)" post-repeat-directive>
+                <div class="list-item-div vertical-center" ng-repeat="c in contacts | searchContact: searchstr | orderBy: 'name' | limitTo: contactsMax" ng-click="contactClicked(c)" ng-init="p = getProfile(c.email)" post-repeat-directive>
                     <span class="link-simg-wrapper">
-                        <span class="initial">{{ c.name[0] | uppercase }}</span>
-                    <img ng-hide="c.src === null" data-img-src="{{ c.src | imgsrcFilter }}" data-img-loaded="false" class="link-simg batched-image-loader">
+                        <span class="initial">{{ p.name[0] | uppercase }}</span>
+                    <img ng-hide="p.picture === null" data-img-src="{{ p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
                     </span>
 
                     <div class="contact-details">
-                        <p class="contact-name">{{ c.name }}</p>
-                        <p class="contact-email"><small>{{c.email}}</small></p>
+                        <p class="contact-name">{{ p.name }}</p>
+                        <p class="contact-email"><small>{{p.email}}</small></p>
                     </div>
                 </div>
             </div>

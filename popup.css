@@ -137,9 +137,10 @@ a:link {
 }
 
 #links-tab {
-    padding: 5px;
-    margin: 5px 0px;
+    padding-bottom: 0px;
     box-shadow: 0px 7px 5px -5px rgba(0, 0, 0, 0.2);
+    display: flex;
+    width: 100%;
 }
 
 .links-tab-header {
@@ -153,11 +154,16 @@ a:link {
 }
 
 .links-tab-header:hover {
-    border-bottom: 4px solid dodgerblue;
+    border-bottom: 4px solid darkslategray;
 }
 
 .links-tab-header.selected {
-    border-bottom: 4px solid dodgerblue;
+    border-bottom: 4px solid yellowgreen;
+}
+
+.search-btn {
+    padding: 0 10px;
+    cursor: button;
 }
 
 #links-wrapper {
@@ -223,7 +229,7 @@ a:link {
 
 .link-simg-wrapper {
     box-sizing: border-box;
-    background-color: dodgerblue;
+    background-color: yellowgreen;
     color: white;
 }
 
@@ -249,13 +255,6 @@ a:link {
     width: 40px;
     height: 40px;
     text-align: center;
-}
-
-#links p {
-    margin: 0;
-    padding: 0;
-    text-align: left;
-    padding-left: 20px;
 }
 
 .link-sender,
@@ -389,9 +388,9 @@ button i {
 }
 
 .profile {
-    padding-top: 5px;
+    /*    padding-top: 5px;*/
     padding-bottom: 15px;
-    margin-bottom: 15px;
+    /*    margin-bottom: 15px;*/
     display: flex;
     flex-direction: row;
     font-size: 11pt;
@@ -426,7 +425,7 @@ button i {
     box-sizing: border-box;
     /*    width: 550px;*/
     width: 100%;
-    padding: 10px 10px;
+    padding: 5px 10px;
     display: inline-block;
 }
 
@@ -491,14 +490,17 @@ button i {
 
 .list-item-div {
     width: 100%;
-    height: 70px;
+    /*    height: 70px;*/
     padding: 10px;
     box-sizing: border-box;
     transition: background 0.25s;
-    cursor: pointer;
 }
 
-.list-item-div.selected,
+.list-item-div .list-item-div-content {
+    padding: 5px;
+}
+
+.list-item-div.open-comments,
 .list-item-div:hover {
     /*    box-shadow: 0px 20px 20px -20px rgba(0, 0, 0, 0.6);*/
     background: rgba(220, 220, 220, 0.3);
@@ -510,22 +512,27 @@ button i {
 
 .link-details,
 .contact-details {
-/*    display: inline-block;*/
+    /*    display: inline-block;*/
     font-size: 10pt;
     flex: 1;
+    overflow: hidden;
+    padding-left: 20px;
+    cursor: pointer;
 }
 
 .link-details p,
-.contact-details p {
+.contact-details p,
+.comment-wrapper p {
     margin: 0;
     padding: 0;
     text-align: left;
-    padding-left: 20px;
 }
+
 .link-title,
 .contact-name {
     margin-bottom: 3px !important;
 }
+
 .link-url,
 .contact-email {
     color: dodgerblue;
@@ -607,17 +614,28 @@ button i {
 
 /********** LINK ***********/
 
+.comment-actions span,
 .link-actions span {
     font-size: 14pt;
     padding: 0 5px;
     color: gainsboro;
+    cursor: pointer;
 }
+
 .link-actions span.enable {
     color: yellowgreen;
 }
+
+.comment-actions span.delete:hover,
 .link-actions span.delete:hover {
     color: crimson;
 }
+
+.link-actions span.comment:hover {
+    color: yellowgreen;
+}
+
+
 /*.link-simg {
     opacity: 0;
     transition: opacity 0.25s;
@@ -625,3 +643,102 @@ button i {
 .link-simg.img-loaded {
     opacity: 1;
 }*/
+
+
+/******** QUICK CONTACT *******/
+
+.quick-contact-wrapper {
+    padding: 10px;
+    text-align: center;
+}
+
+.quick-contact {
+    margin: 0 10px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    transform: scale(1);
+}
+
+.quick-contact:hover {
+    transform: scale(1.1);
+}
+
+.quick-contact:active {
+    transform: scale(1.1) rotateZ(90deg);
+}
+
+
+/******** COMMENTS **********/
+
+.list-item-div {
+    overflow: hidden;
+}
+
+.list-item-div .comments-container {
+    background: white;
+    box-sizing: border-box;
+    max-height: 0;
+    transition: max-height 0.4s;
+    overflow: auto;
+    border-radius: 4px;
+}
+
+.list-item-div.open-comments .comments-container {
+    max-height: 200px;
+}
+
+.comments-container ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.comment-wrapper {
+    padding: 10px;
+    padding-left: 40px;
+    font-size: 9pt;
+    display: flex;
+    flex-direction: row;
+}
+
+.comment-wrapper:not(:last-child) {
+    border-bottom: 2px solid lavender;
+}
+
+.comment-wrapper p {
+    padding: 5px;
+}
+
+.comment-wrapper form,
+.comment-content {
+    flex: 1;
+}
+
+.comment-email {
+    /*    color: black;*/
+    font-weight: bold;
+    border-left: 4px solid yellowgreen;
+}
+
+.comment-line {
+    font-size: 10pt;
+}
+
+
+.search-input {
+    flex: 1;
+}
+
+.search-input,
+.comment-line input[type="text"] {
+    border: 0;
+    width: 100%;
+    /*    border-radius: 2px;*/
+    padding: 0;
+    box-sizing: border-box;
+    outline: none;
+    font-family: Montserrat;
+    color: inherit;
+    padding: 5px;
+    /*    border-bottom: 2px solid dodgerblue;*/
+}

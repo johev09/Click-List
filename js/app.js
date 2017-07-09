@@ -25,21 +25,35 @@ app.config([
     }
 ]);
 app.controller('popup-controller', function ($scope, $window) {
+    $scope.comment = {};
+    $scope.openSearch = false;
     $scope.emailToContact = bg.app.emailToContact;
     $scope.contacts = bg.app.contacts;
+    $scope.quickContacts = bg.app.quickContacts;
     $scope.searchstr = '';
     $scope.email = '';
-    $scope.signedIn = bg.app.singedIn;
-    $scope.links = {
-        from: bg.app.links.from,
-        to: bg.app.links.to
-    };
+    $scope.signedIn = bg.app.signedIn;
+    $scope.links = bg.app.links;
+    $scope.from = bg.app.from;
+    $scope.to = bg.app.to;
     $scope.profile = {
         name: "name",
         email: "name@domain.com",
-        picture: "./bored.png"
+        picture: bg.app.defaultProfilePicture
     }
-    $scope.tabHeaders = ["Received", "Sent", "Contacts"];
+    $scope.tabHeaders = [
+        {
+            name: "Received",
+            obj: $scope.from
+        },
+        {
+            name: "Sent",
+            obj: $scope.to
+        },
+        {
+            name: "Contacts",
+            obj: $scope.contacts
+        }];
     $scope.tab = {
         favicon: 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=',
         title: '',
@@ -49,17 +63,26 @@ app.controller('popup-controller', function ($scope, $window) {
     /********* POPUP **********/
     const popup = {
         emailinput: $("#emailinput"),
-        send: (link, to) => {
-            bg.app.send({
-                    title: $scope.tab.title,
-                    url: $scope.tab.url,
-                    favicon: $scope.tab.favicon,
-                    received: false,
-                    opened: false
-                }, $scope.email)
-                .then(() => console.log("success"))
-                .catch(err => console.log(err));
-            $scope.emailClear();
+        send: () => {
+            var from = bg.app.user.email,
+                to = $scope.email;
+
+            var link = {
+                from: from,
+                to: to,
+                title: $scope.tab.title,
+                url: $scope.tab.url,
+                favicon: $scope.tab.favicon,
+                received: false,
+                opened: false
+            };
+
+            bg.app.send(link, to)
+                .then(() => {
+                    bg.app.addToQuickContact(to);
+                    popup.emailClear();
+                })
+                .catch(err => console.error(err));
         },
         contactClicked: contact => {
             $scope.email = contact.email;
@@ -67,6 +90,36 @@ app.controller('popup-controller', function ($scope, $window) {
         },
         showTab: (index) => {
             $scope.selectedTabIndex = index;
+        },
+        gotToken: (token) => {
+            // Authrorize Firebase with the OAuth Access Token.
+            var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
+            firebase.auth().signInWithCredential(credential).catch(function (error) {
+                // The OAuth token might have been invalidated. Lets' remove it from cache.
+                if (error.code === 'auth/invalid-credential') {
+                    chrome.identity.removeCachedAuthToken({
+                        token: token
+                    }, function () {
+                        popup.startAuth(interactive);
+                    });
+                }
+            });
+        },
+        startAuth: (interactive) => {
+            // Request an OAuth token from the Chrome Identity API.
+            chrome.identity.getAuthToken({
+                interactive: interactive
+            }, function (token) {
+                if (chrome.runtime.lastError && !interactive) {
+                    console.log('It was not possible to get a token programmatically.');
+                } else if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError);
+                } else if (token) {
+                    popup.gotToken(token);
+                } else {
+                    console.error('The OAuth Token was null');
+                }
+            });
         },
         getCurrentTab: () => {
             return new Promise(function (resolve, reject) {
@@ -94,59 +147,6 @@ app.controller('popup-controller', function ($scope, $window) {
                 };
             });
         },
-        gotToken: (token) => {
-            // Authrorize Firebase with the OAuth Access Token.
-            var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
-            firebase.auth().signInWithCredential(credential).catch(function (error) {
-                // The OAuth token might have been invalidated. Lets' remove it from cache.
-                if (error.code === 'auth/invalid-credential') {
-                    chrome.identity.removeCachedAuthToken({
-                        token: token
-                    }, function () {
-                        popup.startAuth(interactive);
-                    });
-                }
-            });
-        },
-        startAuth: (interactive) => {
-            // Request an OAuth token from the Chrome Identity API.
-            chrome.identity.getAuthToken({
-                interactive: interactive
-            }, function (token) {
-                if (chrome.runtime.lastError && !interactive) {
-                    console.log('It was not possible to get a token programmatically.');
-                } else if (chrome.runtime.lastError) {
-                    console.error(chrome.runtime.lastError);
-                } else if (token) {
-                    popup.gotToken(token)
-                } else {
-                    console.error('The OAuth Token was null');
-                }
-            });
-        },
-        initFirebase: () => {
-            firebase.auth().onAuthStateChanged(function (user) {
-                if (user) {
-                    // User is signed in.
-                    var displayName = user.displayName;
-                    var email = user.email;
-                    var emailVerified = user.emailVerified;
-                    var photoURL = user.photoURL;
-                    var isAnonymous = user.isAnonymous;
-                    var uid = user.uid;
-                    var providerData = user.providerData;
-
-                    $scope.signedIn = true;
-                    $scope.profile.name = displayName;
-                    $scope.profile.email = email;
-                    $scope.profile.picture = photoURL;
-                } else {
-                    console.log("signed out");
-                    $scope.signedIn = false;
-                }
-                $scope.$apply();
-            });
-        },
         renderEmailSuggestion: (ul, item) => {
             var listItem = $("<div/>", {
                 class: 'list-item-div vertical-center'
@@ -165,7 +165,7 @@ app.controller('popup-controller', function ($scope, $window) {
                 "data-img-loaded": "false",
             })
             if (item.src) {
-                img.attr("src", getProfilePictureSrc(item.src));
+                img.attr("src", withAccessToken(item.src));
             } else {
                 img.addClass("ng-hide");
             }
@@ -199,20 +199,34 @@ app.controller('popup-controller', function ($scope, $window) {
                 $scope.send();
             })
         },
+        compareContact: (a, b) => {
+            return a.name.localeCompare(b.name);
+        },
+        maxEmailSuggestion: 2,
         setupEmailSuggestion: () => {
             popup.emailinput
                 .autocomplete({
                     minLength: 0,
                     source: (req, res) => {
                         if (req && req.term) {
-                            var suggestedContacts = bg.app.contacts.filter(contact => {
-                                return (contact.email && contact.email.contains(req.term)) ||
-                                    (contact.name && contact.name.contains(req.term));
+                            // will first show results which starts with term
+                            // and then results which contains term
+                            var contactsStartsWith = [],
+                                contactsContains = [];
+                            $scope.contacts.forEach(contact => {
+                                if (contact.email.startsWith(req.term) ||
+                                    contact.name.startsWith(req.term)) {
+                                    contactsStartsWith.push(contact);
+                                } else if ((contact.email && contact.email.contains(req.term)) ||
+                                    (contact.name && contact.name.contains(req.term))) {
+                                    contactsContains.push(contact);
+                                }
                             });
-                            suggestedContacts = suggestedContacts.sort((a, b) => {
-                                return a.name.localeCompare(b.name);
-                            });
-                            res(suggestedContacts.slice(0, 4));
+                            contactsStartsWith = contactsStartsWith.sort(popup.compareContact);
+                            contactsContains = contactsContains.sort(popup.compareContact);
+                            var suggestedContacts = contactsStartsWith.concat(contactsContains);
+
+                            res(suggestedContacts.slice(0, popup.maxEmailSuggestion));
                         }
                     },
                     focus: (event, ui) => {},
@@ -226,35 +240,50 @@ app.controller('popup-controller', function ($scope, $window) {
                 .autocomplete("instance")
                 ._renderItem = popup.renderEmailSuggestion;
         },
+
         signIn: () => {
             popup.startAuth(true);
         },
         emailClear: () => {
             $scope.email = '';
+            $scope.$apply();
         },
-        deleteLinkFrom: val => {
-            var index = $scope.links.from.indexOf(val);
-            if (index !== -1) {
-                bg.app.deleteLinkFrom(index);
-            }
+        deleteFrom: from => {
+            bg.app.deleteFrom(from);
         },
-        deleteLinkTo: val => {
-            var index = $scope.links.to.indexOf(val);
-            if (index !== -1) {
-                bg.app.deleteLinkTo(index);
-            }
+        deleteTo: to => {
+            bg.app.deleteTo(to);
         },
         openURL: url => {
             chrome.tabs.create({
                 url: url
             });
         },
-        clickedLinkFrom: val => {
-            popup.openURL(val.link.url);
-            bg.app.updateLinkOpened(val);
+        clickedLinkFrom: from => {
+            bg.app.openURL($scope.links[from.linkKey].url);
+            bg.app.openedLink(from.linkKey);
         },
-        clickedLinkTo: val => {
-            popup.openURL(val.link.url);
+        clickedLinkTo: to => {
+            bg.app.openURL($scope.links[to.linkKey].url);
+        },
+        clickedQuickContact: qc => {
+            $scope.email = qc;
+            popup.send();
+        },
+
+        openComments: from => {
+            from.openComments = !from.openComments;
+        },
+        addComment: linkKey => {
+            bg.app.addComment(linkKey, $scope.comment[linkKey]);
+            $scope.comment[linkKey] = '';
+        },
+        deleteComment: (linkKey, commentKey) => {
+            bg.app.deleteComment(linkKey, commentKey);
+        },
+        watch: () => {
+            //            $scope.$watch('from', loadProfilePictures, true);
+            //            $scope.$watch('to', loadProfilePictures, true);
         },
         initUI: () => {
             popup.setupEmailSuggestion();
@@ -267,13 +296,22 @@ app.controller('popup-controller', function ($scope, $window) {
             $scope.contactClicked = popup.contactClicked;
 
             $scope.clickedLinkFrom = popup.clickedLinkFrom;
-            $scope.clickedToFrom = popup.clickedLinkTo;
-            $scope.deleteLinkFrom = popup.deleteLinkFrom;
-            $scope.deleteLinkTo = popup.deleteLinkTo;
+            $scope.clickedLinkTo = popup.clickedLinkTo;
+            $scope.deleteFrom = popup.deleteFrom;
+            $scope.deleteTo = popup.deleteTo;
+            $scope.clickedQuickContact = popup.clickedQuickContact;
+
+            $scope.openComments = popup.openComments;
+            $scope.addComment = popup.addComment;
+            $scope.deleteComment = popup.deleteComment;
         },
         attachToBackground: () => {
+            $scope.getProfile = bg.app.getProfile;
+
+            bg.app.hideUnreadBadge();
             bg.app.refreshToken();
             bg.app.popup = popup;
+
             // connecting to background script
             // background script will receive event
             // on popup close
@@ -281,9 +319,31 @@ app.controller('popup-controller', function ($scope, $window) {
                 name: 'popup'
             });
         },
+        initFirebase: () => {
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) {
+                    // User is signed in.
+                    /*var displayName = user.displayName;
+                    var email = user.email;
+                    var emailVerified = user.emailVerified;
+                    var photoURL = user.photoURL;
+                    var isAnonymous = user.isAnonymous;
+                    var uid = user.uid;
+                    var providerData = user.providerData;*/
+
+                    $scope.profile.name = user.displayName;
+                    $scope.profile.email = user.email;
+                    $scope.profile.picture = user.photoURL;
+                } else {
+                    console.log("signed out");
+                }
+                $scope.$apply();
+            });
+        },
         init: () => {
             popup.attachToBackground();
             popup.initUI();
+            popup.watch();
             popup.initFirebase();
             if ($scope.signedIn) {
                 popup.startAuth(false);
@@ -304,10 +364,8 @@ app.controller('contacts-controller', function ($scope) {
 })
 
 app.controller('tab-controller', function ($scope) {
-
     setTimeout(() => {
-        $scope.$parent
-            .popup
+        $scope.$parent.popup
             .getCurrentTab()
             .then(tab => {
                 $scope.tab.title = tab.title;
@@ -316,18 +374,12 @@ app.controller('tab-controller', function ($scope) {
                 $scope.$apply();
             })
     });
-})
+});
 
-app.directive('postRepeatDirective', function () {
-    return function (scope, element, attrs) {
-        if (scope.$last) {
-            $('.batched-image-loader').batchedImageLoader({
-                delay: 1000, // in msecs
-                batchSize: 10, // size of each batch to load
-                className: 'batched-image-loader' // class on images
-            });
-        }
-    };
+app.filter('reverse', function () {
+    return function (items) {
+        return items.slice().reverse();
+    }
 });
 app.filter('searchContact', function () {
     return function (arr, searchstr) {
@@ -352,8 +404,9 @@ app.filter('searchLink', function () {
 
         var res = [];
         angular.forEach(arr, function (c) {
-            if (c.link.title.contains(searchstr) ||
-                c.link.url.contains(searchstr) ||
+            var link = bg.app.links[c.linkKey];
+            if (link.title.contains(searchstr) ||
+                link.url.contains(searchstr) ||
                 (c.from && c.from.contains(searchstr)) ||
                 (c.to && c.to.contains(searchstr))) {
                 res.push(c);
@@ -363,21 +416,45 @@ app.filter('searchLink', function () {
         return res;
     }
 })
-
-app.filter('imgsrcFilter', function () {
+app.filter('accessToken', function () {
     return function (src) {
         if (src) {
-            return getProfilePictureSrc(src);
+            return src;
+            /*if (src ===  bg.app.defaultProfilePicture ||
+               src === bg.app.unknownProfilePicture) {
+                return src;
+            } else {
+                return withAccessToken(src);
+            }*/
         } else {
-            //blank transparent gif
+            //empty image
             return 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
         }
     }
-})
+});
+app.filter('orderObjectBy', function () {
+    return function (items, field, reverse) {
+        var filtered = [];
+        angular.forEach(items, function (item, key) {
+            filtered.push(item);
+        });
+        filtered.sort(function (a, b) {
+            return (a[field] > b[field] ? 1 : -1);
+        });
+        if (reverse) filtered.reverse();
+        return filtered;
+    };
+});
 
+app.directive('postRepeatDirective', function () {
+    return function (scope, element, attrs) {
+        if (scope.$last || scope.$first) {
+            loadProfilePictures();
+        }
+    };
+});
 app.directive("whenScrolled", function () {
     return {
-
         restrict: 'A',
         link: function (scope, elem, attrs) {
 
@@ -396,25 +473,30 @@ app.directive("whenScrolled", function () {
         }
     }
 });
+app.directive('focusOn', ($parse) => {
+    return (scope, element, attrs) => {
 
-app.filter('orderObjectBy', function () {
-    return function (items, field, reverse) {
-        var filtered = [];
-        angular.forEach(items, function (item, key) {
-            filtered.push(item);
+        scope.$watch(attrs.focusOn, focus => {
+            console.log("focuse: ", focus);
+            if (focus) {
+                setTimeout(() => element.focus());
+            }
         });
-        filtered.sort(function (a, b) {
-            return (a[field] > b[field] ? 1 : -1);
-        });
-        if (reverse) filtered.reverse();
-        return filtered;
     };
 });
 
+function loadProfilePictures() {
+    //    setTimeout(() => {
+    console.log('loading profile pictures...');
+    $('.batched-image-loader').batchedImageLoader({
+        delay: 1000, // in msecs
+        batchSize: 10, // size of each batch to load
+        className: 'batched-image-loader' // class on images
+    });
+    //    });
+}
 
-
-
-function getProfilePictureSrc(src) {
+function withAccessToken(src) {
     return src +
         "&access_token=" + bg.app.token;
 }
