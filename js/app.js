@@ -24,33 +24,36 @@ app.config([
         // Angular before v1.2 uses $compileProvider.urlSanitizationWhitelist(...)
     }
 ]);
-app.controller('popup-controller', function ($scope, $window) {
+app.controller('popup-controller', function ($scope, $timeout, $window) {
     $scope.comment = {};
     $scope.openSearch = false;
-    $scope.emailToContact = bg.app.emailToContact;
-    $scope.contacts = bg.app.contacts;
-    $scope.quickContacts = bg.app.quickContacts;
+    $scope.emailToContact = {};
+    $scope.contacts = [];
+    $scope.quickContacts = [];
     $scope.searchstr = '';
     $scope.email = '';
-    $scope.signedIn = bg.app.signedIn;
-    $scope.links = bg.app.links;
-    $scope.from = bg.app.from;
-    $scope.to = bg.app.to;
+    $scope.signedIn = false; //bg.app.signedIn;
+    $scope.links = {};
+    $scope.from = []
+    $scope.to = [];
     $scope.profile = {
         name: "name",
         email: "name@domain.com",
-        picture: bg.app.defaultProfilePicture
-    }
+        picture: app.defaultProfilePicture
+    };
     $scope.tabHeaders = [
         {
+            iconClass: "fa fa-arrow-down",
             name: "Received",
             obj: $scope.from
         },
         {
+            iconClass: "fa fa-arrow-up",
             name: "Sent",
             obj: $scope.to
         },
         {
+            iconClass: "fa fa-address-book",
             name: "Contacts",
             obj: $scope.contacts
         }];
@@ -60,29 +63,44 @@ app.controller('popup-controller', function ($scope, $window) {
         url: ''
     };
 
+    $scope.getObjectLength = obj => {
+        var len = 0;
+        if (obj) {
+            len = Object.keys(obj).length;
+        }
+        return len;
+    }
+
     /********* POPUP **********/
     const popup = {
         emailinput: $("#emailinput"),
+        isValidEmail: email => {
+            var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+            return re.test(email);
+        },
         send: () => {
-            var from = bg.app.user.email,
-                to = $scope.email;
+            if (popup.isValidEmail($scope.email)) {
+                var from = bg.app.user.email,
+                    to = $scope.email;
 
-            var link = {
-                from: from,
-                to: to,
-                title: $scope.tab.title,
-                url: $scope.tab.url,
-                favicon: $scope.tab.favicon,
-                received: false,
-                opened: false
-            };
+                var link = {
+                    from: from,
+                    to: to,
+                    title: $scope.tab.title,
+                    url: $scope.tab.url,
+                    favicon: $scope.tab.favicon,
+                    received: false,
+                    opened: false
+                };
 
-            bg.app.send(link, to)
-                .then(() => {
-                    bg.app.addToQuickContact(to);
-                    popup.emailClear();
-                })
-                .catch(err => console.error(err));
+                bg.app.send(link, to)
+                    .then(() => {
+                        bg.app.addToQuickContact(to);
+                        popup.emailClear();
+                        $scope.selectedTabIndex = 1;
+                    })
+                    .catch(err => console.error(err));
+            }
         },
         contactClicked: contact => {
             $scope.email = contact.email;
@@ -90,36 +108,6 @@ app.controller('popup-controller', function ($scope, $window) {
         },
         showTab: (index) => {
             $scope.selectedTabIndex = index;
-        },
-        gotToken: (token) => {
-            // Authrorize Firebase with the OAuth Access Token.
-            var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
-            firebase.auth().signInWithCredential(credential).catch(function (error) {
-                // The OAuth token might have been invalidated. Lets' remove it from cache.
-                if (error.code === 'auth/invalid-credential') {
-                    chrome.identity.removeCachedAuthToken({
-                        token: token
-                    }, function () {
-                        popup.startAuth(interactive);
-                    });
-                }
-            });
-        },
-        startAuth: (interactive) => {
-            // Request an OAuth token from the Chrome Identity API.
-            chrome.identity.getAuthToken({
-                interactive: interactive
-            }, function (token) {
-                if (chrome.runtime.lastError && !interactive) {
-                    console.log('It was not possible to get a token programmatically.');
-                } else if (chrome.runtime.lastError) {
-                    console.error(chrome.runtime.lastError);
-                } else if (token) {
-                    popup.gotToken(token);
-                } else {
-                    console.error('The OAuth Token was null');
-                }
-            });
         },
         getCurrentTab: () => {
             return new Promise(function (resolve, reject) {
@@ -137,7 +125,7 @@ app.controller('popup-controller', function ($scope, $window) {
                     favIcon = tab.favIconUrl;
                 } else {
                     // couldn't obtain favicon as a normal url, try chrome://favicon/url
-                    favIcon = 'chrome://favicon/' + link;
+                    favIcon = 'chrome://favicon/' + tab.url;
                 }
 
                 return {
@@ -241,9 +229,6 @@ app.controller('popup-controller', function ($scope, $window) {
                 ._renderItem = popup.renderEmailSuggestion;
         },
 
-        signIn: () => {
-            popup.startAuth(true);
-        },
         emailClear: () => {
             $scope.email = '';
             $scope.$digest();
@@ -260,8 +245,9 @@ app.controller('popup-controller', function ($scope, $window) {
             });
         },
         clickedLinkFrom: from => {
-            bg.app.openURL($scope.links[from.linkKey].url);
-            bg.app.openedLink(from.linkKey);
+            bg.app.openLink(from.linkKey);
+            /*bg.app.openURL($scope.links[from.linkKey].url);
+            bg.app.openedLink(from.linkKey);*/
         },
         clickedLinkTo: to => {
             bg.app.openURL($scope.links[to.linkKey].url);
@@ -275,15 +261,14 @@ app.controller('popup-controller', function ($scope, $window) {
             from.openComments = !from.openComments;
         },
         addComment: linkKey => {
-            bg.app.addComment(linkKey, $scope.comment[linkKey]);
-            $scope.comment[linkKey] = '';
+            if ($scope.comment[linkKey] &&
+                $scope.comment[linkKey].length) {
+                bg.app.addComment(linkKey, $scope.comment[linkKey]);
+                $scope.comment[linkKey] = '';
+            }
         },
         deleteComment: (linkKey, commentKey) => {
             bg.app.deleteComment(linkKey, commentKey);
-        },
-        watch: () => {
-            //            $scope.$watch('from', loadProfilePictures, true);
-            //            $scope.$watch('to', loadProfilePictures, true);
         },
         initUI: () => {
             popup.setupEmailSuggestion();
@@ -304,50 +289,67 @@ app.controller('popup-controller', function ($scope, $window) {
             $scope.openComments = popup.openComments;
             $scope.addComment = popup.addComment;
             $scope.deleteComment = popup.deleteComment;
+
+            $scope.addContact = () => {
+                bg.app.openURL('https://contacts.google.com/');
+            };
+            $scope.refreshContact = () => {
+                bg.app.startAuth(false)
+                    .then(bg.app.initContacts);
+            }
+            $scope.clickedProfilePicture = profile => {
+                $scope.selectedTabIndex = 2;
+                $scope.openSearch = true;
+                $scope.searchstr = profile.email;
+            }
         },
         attachToBackground: () => {
-            $scope.getProfile = bg.app.getProfile;
-
-            bg.app.hideUnreadBadge();
-            bg.app.refreshToken();
-            bg.app.popup = popup;
-
             // connecting to background script
             // background script will receive event
             // on popup close
             chrome.runtime.connect({
                 name: 'popup'
             });
-        },
-        initFirebase: () => {
-            firebase.auth().onAuthStateChanged(function (user) {
-                if (user) {
-                    // User is signed in.
-                    /*var displayName = user.displayName;
-                    var email = user.email;
-                    var emailVerified = user.emailVerified;
-                    var photoURL = user.photoURL;
-                    var isAnonymous = user.isAnonymous;
-                    var uid = user.uid;
-                    var providerData = user.providerData;*/
+            bg.app.setPopup(popup);
 
-                    $scope.profile.name = user.displayName;
-                    $scope.profile.email = user.email;
-                    $scope.profile.picture = user.photoURL;
-                } else {
-                    console.log("signed out");
-                }
-                $scope.$apply();
-            });
+            $scope.getProfile = bg.app.getProfile;
+            $scope.emailToContact = bg.app.emailToContact;
+            $scope.contacts = bg.app.contacts;
+            $scope.quickContacts = bg.app.quickContacts;
+            $scope.signedIn = bg.app.signedIn;
+            $scope.links = bg.app.links;
+            $scope.from = bg.app.from;
+            $scope.to = bg.app.to;
+            $scope.profile = bg.app.profile;
+
+            $scope.tabHeaders[0].obj = $scope.from;
+            $scope.tabHeaders[1].obj = $scope.to;
+            $scope.tabHeaders[2].obj = $scope.contacts;
+        },
+        signIn: () => {
+            bg.app.startAuth(true);
+            //closing popup to complete OAuth flow
+            window.close();
+        },
+        refreshToken: () => {
+            bg.app.refreshToken()
+                .then(popup.update);
         },
         init: () => {
             popup.attachToBackground();
             popup.initUI();
-            popup.watch();
-            popup.initFirebase();
             if ($scope.signedIn) {
-                popup.startAuth(false);
+                bg.app.hideUnreadBadge();
+
+                setTimeout(popup.refreshToken,100)
             }
+        },
+
+        reload: () => {
+            window.location.reload();
+        },
+        update: () => {
+            $timeout(() => $scope.$digest());
         }
     }
     popup.init();

@@ -21,6 +21,7 @@ var app = {
     retryTimeout: 2000,
 
     /******** QUICK CONTACTS *********/
+    colors: ["yellowgreen", "crimson", "dodgerblue", "darkslategray"],
     quickContacts: [],
     quickContactsMax: 5,
     initQuickContacts: () => {
@@ -191,11 +192,24 @@ var app = {
         });
     },
     hideUnreadBadge: () => {
+        app.undreadCount = 0;
         app.saveToLocalStorage('lastFromTimestamp', app.lastFromTimestamp);
 
         chrome.browserAction.setBadgeText({
             text: ''
         });
+    },
+    showSendAnimation: () => {
+        chrome.browserAction.setBadgeText({
+            text: "Sent"
+        });
+        setTimeout(() => {
+            if (!app.isPopupOpen() && app.unreadCount) {
+                app.showUnreadBadge();
+            } else {
+                app.hideUnreadBadge();
+            }
+        }, 2000);
     },
 
     yupButton: {
@@ -206,7 +220,7 @@ var app = {
         title: "Later...",
         iconUrl: "./img/bored.png"
     },
-    chime: new Audio('chime.mp3'),
+    chime: new Audio('./audio/chime.mp3'),
     notifications: {},
     notifyLink: from => {
         app.refreshToken()
@@ -214,26 +228,27 @@ var app = {
                 var link = app.links[from.linkKey],
                     profile = app.getProfile(from.from);
 
-                console.log("notifying.... ", link, profile);
-
-                var iconUrl = profile.picture ? profile.picture : 'pointing.png';
+                console.log("notifying... ", link, profile);
                 chrome.notifications.create(null, {
                     type: "basic",
-                    title: 'NEW LINK!!!',
+                    title: 'You have received a new Link!',
                     message: link.title,
                     contextMessage: link.url,
-                    iconUrl: iconUrl,
+                    iconUrl: profile.picture,
                     buttons: [app.yupButton, app.nopeButton]
                 }, function (id) {
                     console.log("notified!", link, profile);
-                    app.notifications[id] = link.url;
+                    app.notifications[id] = from.linkKey;
                     app.chime.play();
                 });
             });
     },
     clickedNotification: notifid => {
         if (notifid in app.notifications) {
-            app.openURL(app.notifications[notifid]);
+            var linkKey = app.notifications[notifid];
+            app.openLink(linkKey);
+            /*app.openedLink(linkKey);
+            app.openURL(app.links[linkKey].url);*/
         }
 
         app.closedNotification(notifid);
@@ -242,14 +257,12 @@ var app = {
         console.log("clicked", notifid, btnIndex);
         if (btnIndex === 0 &&
             notifid in app.notifications) {
-            app.openURL(app.notifications[notifid]);
+            app.clickedNotification(notifid);
         }
-
-        app.closedNotification(notifid);
     },
     closedNotification: (notifid, byuser) => {
         chrome.notifications.clear(notifid);
-        delete notifications[notifid]
+        delete app.notifications[notifid];
     },
     initChromeNotificationListeners: () => {
         chrome.notifications.onClicked.addListener(app.clickedNotification);
@@ -257,7 +270,7 @@ var app = {
         chrome.notifications.onClosed.addListener(app.closedNotification);
     },
     openURL: url => {
-        console.log("opening tab", url);
+        console.log("opening url...", url);
         chrome.tabs.create({
             url: url
         });
@@ -266,6 +279,11 @@ var app = {
     /****** PROFILE & CONTACT ******/
     defaultProfilePicture: './img/bored.png',
     unknownProfilePicture: './img/who.png',
+    profile: {
+        name: "name",
+        email: "name@domain.com",
+        picture: './img/bored.png'
+    },
     getProfile: email => {
         var name, email, picture;
         if (email == app.user.email) {
@@ -345,7 +363,7 @@ var app = {
                         email: email,
                         name: name === null ? email : name,
                         src: src,
-                        color: "dodgerblue",
+                        color: app.colors.getRandom(),
                         phoneNumber: phoneNumber
                     };
                     app.emailToContact[email] = contact;
@@ -355,10 +373,9 @@ var app = {
         });
 
         console.log(app.contacts);
+        app.reloadPopup();
     },
-    getContacts: (token) => {
-        app.token = token;
-        console.log(token);
+    initContacts: (token) => {
         console.log("requesting for contacts for: " + app.user.email);
 
         var api = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&max-results=999";
@@ -381,32 +398,76 @@ var app = {
         }
         xhr.onerror = function (err) {
             console.error("failed to fetch contacts", err);
-            setTimeout(() => getAllContacts(token), app.retryTimeout);
+            //            setTimeout(() => getAllContacts(token), app.retryTimeout);
         }
         xhr.send(null);
     },
-    refreshToken: () => {
-        return app.getToken()
-            .then(token => {
-                app.token = token;
-                return app.token;
-            });
-        //            .catch(app.printError);
+
+    /******* LOGIN & TOKEN ********/
+    authorizing: false,
+    initFirebase: token => {
+        // Listen for auth state changes.
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                app.user = user;
+                app.profile = {
+                    name: user.displayName,
+                    email: user.email,
+                    picture: user.photoURL
+                };
+                app.signedIn = true;
+                app.setLinksListener();
+                app.initContacts(token);
+            } else {
+                app.signedIn = false;
+            }
+
+            console.log('User state change detected from the Background script of the Chrome Extension:', user);
+            app.updatePopup();
+        });
+
+        // Authrorize Firebase with the OAuth Access Token.
+        var credential = firebase.auth.GoogleAuthProvider.credential(null, token);
+        firebase.auth().signInWithCredential(credential).catch(function (error) {
+            // The OAuth token might have been invalidated. Lets' remove it from cache.
+            if (error.code === 'auth/invalid-credential') {
+                chrome.identity.removeCachedAuthToken({
+                    token: token
+                }, function () {
+                    popup.startAuth(false);
+                });
+            }
+        });
     },
-    getToken: () => {
+    gotAuthToken: token => {
+        app.initFirebase(token);
+    },
+    startAuth: interactive => {
         return new Promise((resolve, reject) => {
+            app.authorizing = true;
+            // Request an OAuth token from the Chrome Identity API.
             chrome.identity.getAuthToken({
-                interactive: false
-            }, (token) => {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                } else if (token) {
+                interactive: !!interactive
+            }, function (token) {
+                app.authorizing = false;
+                if (token) {
+                    app.token = token;
                     resolve(token);
+                } else if (chrome.runtime.lastError) {
+                    if (chrome.runtime.lastError.message === 'Authorization page could not be loaded.') {
+                        chrome.runtime.reload();
+                    }
+                    console.error(chrome.runtime.lastError);
+                    reject(chrome.runtime.lastError);
                 } else {
-                    reject("failed to get token");
+                    console.error('The OAuth Token was null');
+                    reject('The OAuth Token was null');
                 }
             });
         });
+    },
+    refreshToken: () => {
+        return app.startAuth(false);
     },
 
     /******* FIREBASE STUFF ********/
@@ -461,6 +522,10 @@ var app = {
             .then(() => console.log("deleted link to!", to))
             .catch(app.printError);
     },
+    openLink: linkKey => {
+        app.openURL(app.links[linkKey].url);
+        app.openedLink(linkKey);
+    },
     openedLink: linkKey => {
         if (!app.links[linkKey].opened) {
             console.log('updating opened', linkKey);
@@ -487,34 +552,43 @@ var app = {
                 var linksRefKey = app.getLinksRefKey();
                 var linkRef = firebase.database().ref(linksRefKey + '/' + linkKey);
 
-                app.links[linkKey] = {};
+                //                app.links[linkKey] = {};
                 linkRef.once('value', snapshot => {
-                    app.links[linkKey] = snapshot.val();
                     console.log("added link", linkKey, snapshot.val());
                     resolve();
+
+                    app.links[linkKey] = snapshot.val();
+                    app.updatePopup();
 
                     if (app.links[linkKey].to == app.user.email) {
                         app.receivedLink(linkKey);
                     }
 
                     linkRef.on('child_added', data => {
-                        app.links[linkKey][data.key] = data.val();
                         console.log("added link child", linkKey, data.key, data.val());
+
+                        app.links[linkKey][data.key] = data.val();
+                        app.updatePopup();
                     });
                 });
                 linkRef.on('child_changed', data => {
-                    app.links[linkKey][data.key] = data.val();
                     console.log("changed link child", linkKey, data.key, data.val());
+
+                    app.links[linkKey][data.key] = data.val();
+                    app.updatePopup();
                 });
                 linkRef.on('child_removed', data => {
-                    app.links[linkKey][data.key] = null;
                     console.log("removed link child", linkKey, data.key, data.val());
+
+                    app.links[linkKey][data.key] = null;
 
                     // if both from and to is deleted remove link
                     if (!app.links[linkKey].from &&
                         !app.links[linkKey].to) {
                         app.removeLink(linkKey);
                     }
+
+                    app.updatePopup();
                 });
             }
         });
@@ -551,6 +625,7 @@ var app = {
         Array.prototype.splice.apply(app.from, [0, app.from.length].concat(removed));
 
         console.log("removed from", data.val());
+        app.updatePopup();
     },
     addedTo: data => {
         var to = app.serialize(data);
@@ -565,6 +640,7 @@ var app = {
         Array.prototype.splice.apply(app.to, [0, app.to.length].concat(removed));
 
         console.log("removed to", data.val());
+        app.updatePopup();
     },
     setLinksListener: () => {
         var fromRefKey = app.getFromRefKey(app.user.email),
@@ -615,7 +691,10 @@ var app = {
 
                 firebase.database().ref()
                     .update(updates)
-                    .then(() => resolve())
+                    .then(() => {
+                        app.showSendAnimation();
+                        resolve()
+                    })
                     .catch(err => reject(err));
             } else {
                 reject("not signed in");
@@ -651,6 +730,9 @@ var app = {
 
     /******* CONNECT ********/
     popup: null,
+    setPopup: popup => {
+        app.popup = popup;
+    },
     isPopupOpen: () => {
         return app.popup !== null;
     },
@@ -666,9 +748,19 @@ var app = {
         if (port.name == 'popup') {
             app.popup = null;
             app.from.forEach(from => from.openComments = false);
-            app.from.forEach(to => to.openComments = false);
+            app.to.forEach(to => to.openComments = false);
         }
         //        console.log("disconnected", port);
+    },
+    updatePopup: () => {
+        if (app.popup) {
+            app.popup.update();
+        }
+    },
+    reloadPopup: () => {
+        if (app.popup) {
+            app.popup.reload();
+        }
     },
 
     /********* UTILS **********/
@@ -677,26 +769,6 @@ var app = {
     },
 
     /********* INIT ************/
-    initFirebase: () => {
-        // Listen for auth state changes.
-        firebase.auth().onAuthStateChanged(user => {
-            if (user) {
-                app.user = user;
-                app.getToken()
-                    .then(token => {
-                        app.signedIn = true;
-                        app.getContacts(token);
-                    })
-                    .catch(app.printError);
-
-                app.setLinksListener();
-            } else {
-                app.signedIn = false;
-            }
-
-            console.log('User state change detected from the Background script of the Chrome Extension:', user);
-        });
-    },
     initChromeEvents: () => {
         chrome.runtime.onConnect.addListener(app.onConnect);
         app.initChromeNotificationListeners();
@@ -706,465 +778,23 @@ var app = {
         app.initQuickContacts();
         app.initChromeEvents();
 
-        app.initFirebase();
+        app.startAuth(false)
+            .then(app.gotAuthToken);
     }
 }
 app.init();
 
-var contact = {},
-    contacts = [];
-
-var gotdata = false,
-    data,
-    lastcount = 0,
-    message;
-var useremail;
-
-var sentLinksBylid = {},
-    receivedLinksBylid = {};
-
-var defaultsrc = "envelope.png";
-var defaultNotifyIcon = "pointing.png";
-var chime = new Audio('chime.mp3')
-
-var URL_WS = 'ws://52.33.207.145:5001';
-//var URL_WS = 'ws://localhost:5001';
-
-var data_lids = new Set();
-var notifications = {};
-
-var access_token;
-
-function getAllContacts() {
-    write("trying to get all contacts...")
-    getAuthToken(function (token) {
-        console.log(token);
-
-        //var url = 'https://www.google.com/m8/feeds/contacts/default/thin?alt=json&max-results=10&orderby=lastmodified&sortorder=descending';
-        var url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&max-results=999";
-        url += "&v=3.0";
-        //url +="&orderby=lastmodified&sortorder=descending";
-
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-        xhr.onload = function () {
-            if (xhr.readyState == 4 && xhr.status == 200) {
-                //console.log(xhr.responseText);
-                var json = JSON.parse(xhr.responseText);
-                var entries = json.feed.entry;
-                entries.forEach(function (entry) {
-                    if (entry.hasOwnProperty("gd$email")) {
-                        var email = entry.gd$email[0].address,
-                            name = "",
-                            src = "";
-                        if (entry.hasOwnProperty("gd$name")) {
-                            name = entry.gd$name.gd$fullName.$t;
-                        }
-                        var links = entry.link;
-                        links.some(function (link) {
-                            if (link.type == "image/*") {
-                                if (link.hasOwnProperty("gd$etag"))
-                                    src = link.href; // + "&access_token=" + token;
-                                return true;
-                            }
-                            return false;
-                        });
-
-                        contact[email] = {
-                            name: name,
-                            src: src,
-                            color: "dodgerblue" //colors.getRandom()
-                        };
-
-                        contacts.push({
-                            email: email,
-                            name: name == "" ? email : name,
-                            src: src,
-                            color: "dodgerblue"
-                        });
-                    }
-                });
-
-                initContextMenus();
-                console.log(contact);
-            }
-        }
-        xhr.onerror = function (err) {
-            console.error("xhr err", err);
-            setTimeout(getAllContacts, 1000)
-        }
-        xhr.send();
-    })
+Array.prototype.getRandom = () => {
+    return this[Math.floor(Math.random() * this.length)];
 }
-/*getAllContacts()*/
-
-function getData(cb) {
-    if (!cb)
-        return
-    chrome.storage.local.get("data", function (items) {
-        console.log(items);
-        if ("data" in items)
-            cb(items.data)
-        else
-            cb([])
-    })
+Array.prototype.remove = val => {
+    var index = this.indexOf(val);
+    if (index !== -1)
+        this.splice(i, 1);
 }
 
-function getQuickContacts(cb) {
-    if (!cb)
-        return
-    chrome.storage.local.get("quickcontacts", function (items) {
-        if ("quickcontacts" in items)
-            cb(items.quickcontacts)
-    })
-}
-
-function saveData() {
-
-    // checking for new links
-    var new_links = [],
-        new_data_lids = new Set();
-    data.forEach(function (link, i) {
-        if (useremail && link.sender == useremail) {
-            sentLinksBylid[link.lid] = data[i]
-        }
-        if (useremail && link.receiver == useremail) {
-            receivedLinksBylid[link.lid] = data[i]
-
-            if (!data_lids.has(link.lid)) {
-                new_links.push(link)
-            }
-        }
-        new_data_lids.add(link.lid)
-    })
-    data_lids = new_data_lids
-
-    if (new_links.length) {
-        chrome.browserAction.setBadgeText({
-            text: "" + new_links.length
-        });
-
-        getAuthToken(function (token) {
-            new_links.forEach(function (link) {
-                var title = link.sender,
-                    message = link.title,
-                    iconUrl = ""
-
-                if (link.sender in contact) {
-                    var sender = contact[link.sender]
-                    title = (sender.name == "" ? title : sender.name)
-                    iconUrl = sender.src + "&access_token=" + token
-                } else {
-                    iconUrl = defaultNotifyIcon
-                }
-
-                chrome.notifications.create(null, {
-                    type: "basic",
-                    title: title,
-                    message: message,
-                    contextMessage: link.link,
-                    iconUrl: iconUrl,
-                    buttons: [{
-                        title: "Check Link",
-                        iconUrl: "happy.png"
-                    }, {
-                        title: "Later...",
-                        iconUrl: "bored.png"
-                    }]
-                }, function (id) {
-                    notifications[id] = link.lid
-                    chime.play()
-                })
-            })
-        })
-    }
-
-    // Save it using the Chrome extension storage API.
-    chrome.storage.local.set({
-        'data': data
-    }, function () {
-        // Notify that we saved.
-        console.log('Settings saved');
-    });
-}
-
-function saveQuickContacts(cb) {
-    chrome.storage.local.set({
-        'quickcontacts': quickContacts
-    }, function () {
-        // Notify that we saved.
-        console.log('Quick Contacts saved');
-    });
-
-    initContextMenus();
-}
-/*getQuickContacts(function (qcontacts) {
-    quickContacts = qcontacts
-
-    saveQuickContacts()
-})*/
-
-function sendlinkto(receiver, link) {
-    getUser(function (email, id) {
-        getTitle(link, function (title) {
-            var data = {
-                lid: 0,
-                sender: email,
-                receiver: receiver,
-                title: title,
-                link: link,
-                favicon: ""
-            }
-
-            send({
-                type: "send",
-                data: data
-            });
-        })
-    });
-
-    // adding receiver to quick contacts
-    addToQuickContact(receiver)
-}
-
-function getTitle(url, cb) {
-    if (!cb)
-        return;
-    url = "http://opengraph.io/api/1.0/site/" + url;
-    $.get(url, function (res) {
-        //console.log(res.hybridGraph.title);
-        cb(res.hybridGraph.title)
-    })
-}
-
-function initContextMenus() {
-    chrome.contextMenus.removeAll();
-
-    var reverse = quickContacts.slice(0).reverse();
-    reverse.forEach(function (email) {
-        var name = (email in contact && contact[email].name != "") ? contact[email].name : email //contact[email].name+" ("+email+")" : email
-        chrome.contextMenus.create({
-            title: name,
-            contexts: ["link"],
-            onclick: function (info, tab) {
-                // Opens Popup.html in new tab
-                //                window.open(chrome.extension.getURL('popup.html'),
-                //                        "_blank", "width=550,height=200,location=0,resizable=0")
-                sendlinkto(email, info.linkUrl)
-            }
-        });
-    })
-}
-
-function notifLinkOpen(lid) {
-    window.open(receivedLinksBylid[lid].link)
-    linkOpened(lid)
-}
-chrome.notifications.onClicked.addListener(function (notifid) {
-    chrome.notifications.clear(notifid)
-    if (notifid in notifications) {
-        notifLinkOpen(notifications[notifid])
-    }
-    delete notifications[notifid]
-});
-chrome.notifications.onButtonClicked.addListener(function (notifid, btnIndex) {
-    chrome.notifications.clear(notifid)
-    if (btnIndex === 0 && notifid in notifications) {
-        notifLinkOpen(notifications[notifid])
-    }
-    delete notifications[notifid]
-});
-chrome.notifications.onClosed.addListener(function (notifid, byuser) {
-    delete notifications[notifid]
-})
-
-function linkOpened(lid) {
-    console.log(lid)
-    var link = receivedLinksBylid[lid]
-    link.opened = 1
-    send({
-        type: "opened",
-        data: {
-            lid: link.lid,
-            sender: link.sender,
-            receiver: link.receiver,
-        }
-    })
-}
-
-function write(text) {
-    console.log(text);
-}
-
-function send(params) {
-    console.log("sending", params);
-    ws.send(JSON.stringify(params));
-}
-
-function getAuthToken(cb) {
-    chrome.identity.getAuthToken({
-        interactive: true
-    }, function (token) {
-        access_token = token;
-        if (cb)
-            cb(token)
-    })
-}
-
-function getUser(callback) {
-    chrome.identity.getProfileUserInfo(function (userInfo) {
-        var email = userInfo.email,
-            id = userInfo.id;
-
-        if (email == "") {
-            console.log("Please Sign in to Chrome...");
-        } else {
-            useremail = email;
-            if (callback)
-                callback(email, id);
-        }
-    });
-}
-
-var ws,
-    wsconnecting = false,
-    wsclosed = true;
-
-function setProxy(cb) {
-    var config = {
-        mode: "direct",
-    };
-    chrome.proxy.settings.set({
-        value: config,
-        scope: "regular"
-    }, function () {
-        if (cb)
-            cb();
-    });
-}
-
-function clearProxy() {
-    chrome.proxy.settings.clear({
-        scope: "regular"
-    })
-}
-
-function connectws() {
-    getData(function (localdata) {
-        data = localdata
-        lastcount = data.length
-        // data from storage is cached so keeping lids in old data_lids Set
-        data.forEach(function (link, i) {
-            data_lids.add(link.lid)
-        })
-
-        saveData()
-        tryconnectws()
-    })
-}
-
-function tryconnectws() {
-    write("trying to connectws...")
-    wsconnecting = true
-    setProxy(function () {
-        getUser(function (email, id) {
-            ws = new WebSocket(URL_WS, 'echo-protocol');
-            write('Connecting... (readyState ' + ws.readyState + ')');
-            ws.onopen = function (msg) {
-                write('Connection successfully opened (readyState ' + this.readyState + ')');
-                send({
-                    type: "email",
-                    data: email
-                });
-
-                clearProxy()
-                wsconnecting = false
-                wsclosed = false
-            };
-            ws.onmessage = function (msg) {
-                //write('Server says: ' + msg.data);
-
-                var rjson = JSON.parse(msg.data);
-                console.log(rjson);
-
-                message = rjson.message;
-                if (rjson.success) {
-                    switch (rjson.action) {
-                        case "deleted":
-                        case "sent":
-                            break
-                        case "data":
-                            gotdata = true
-                            data = rjson.data
-
-                            updatePopup()
-                            saveData()
-                    }
-                }
-            };
-            ws.onclose = function (msg) {
-                if (this.readyState == 2)
-                    write('Closing... The connection is going throught the closing handshake (readyState ' + this.readyState + ')');
-                else if (this.readyState == 3) {
-                    clearProxy()
-                    setTimeout(connectws, 1000)
-                    write('Connection closed... The connection has been closed or could not be opened (readyState ' + this.readyState + ')');
-                } else {
-                    clearProxy()
-                    setTimeout(connectws, 1000)
-                    write('Connection closed... (unhandled readyState ' + this.readyState + ')');
-                }
-                wsclosed = true
-            };
-            ws.onerror = function (event) {
-                console.error(event.data);
-            };
-        })
-    })
-}
-/*connectws()*/
-
-var quickContacts = [];
-var maxContact = 5;
-
-function addToQuickContact(email) {
-    quickContacts.remove(email)
-    if (quickContacts.length > maxContact) {
-        quickContacts.splice(0, 1)
-    }
-
-    quickContacts.push(email)
-    saveQuickContacts()
-}
-
-function updatePopup() {
-    var views = chrome.extension.getViews({
-        type: "popup"
-    });
-    if (views.length) {
-        lastcount = data.length
-        for (var i = 0; i < views.length; i++) {
-            views[i].filldata();
-        }
-    }
-}
-
-var colors = ["#3e3e3e", "#ac2100", "#0032a3", "#6100b4", "#57048b"]
-Array.prototype.getRandom = function () {
-    var val = this[Math.floor(Math.random() * this.length)]
-    console.log(val)
-    return val
-}
-Array.prototype.remove = function (val) {
-    var i = this.indexOf(val);
-    if (i > -1)
-        this.splice(i, 1)
-    return this
-}
-
-function isOnline() {
-    if (!navigator.onLine && !wsclosed) {
+/*function isOnline() {
+    if (!navigator.onLine) {
         wsclosed = true
         wsconnecting = false
         ws.close()
@@ -1172,4 +802,4 @@ function isOnline() {
     //console.log(navigator.onLine,closed,connecting)
     setTimeout(isOnline, 1000)
 }
-//isOnline()
+//isOnline()*/

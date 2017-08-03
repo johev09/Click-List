@@ -5,8 +5,8 @@
     <title>Click Lists's Popup</title>
 
     <link rel="stylesheet" type="text/css" href="./fonts/font-awesome/css/font-awesome.css" />
-    <link rel="stylesheet" href="./css/jquery-ui.css">
-    <link rel="stylesheet" type="text/css" href="popup.css" />
+    <link rel="stylesheet" type="text/css" href="./css/jquery-ui.css">
+    <link rel="stylesheet" type="text/css" href="./css/popup.css" />
 
 </head>
 
@@ -18,18 +18,18 @@
             <p class="profile-email"><small><i>{{profile.email}}</i></small></p>
         </div>
     </div>
-    <div class="quick-contact-wrapper vertical-center">
-        <span class="quick-contact link-simg-wrapper" ng-repeat="qc in quickContacts | reverse" ng-click="clickedQuickContact(qc)" ng-init="p = getProfile(qc)" title="Send Link to {{qc}}" post-repeat-directive>
-            <span class="initial">{{p.name[0] | uppercase}}</span>
-        <img ng-hide="p.picture === null" data-img-src="{{p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
-        </span>
-    </div>
-    <div id="email-form">
+    <div id="email-form" class="vertical-center">
         <form autocomplete="off" class="before" ng-class="{'not-empty' : email.length>0}" ng-submit="send()">
             <input class="ui-widget" type="text" id="emailinput" placeholder="Search or Type Email. Press Enter to Send..." autofocus ng-model="email" />
 
             <button type="button" class="email-clear" ng-show="email.length" ng-click="emailClear()"><i class="fa fa-times"></i></button>
         </form>
+        <div class="quick-contact-wrapper vertical-center">
+            <span class="quick-contact link-simg-wrapper" ng-repeat="qc in quickContacts | reverse" ng-click="clickedQuickContact(qc)" ng-init="p = getProfile(qc)" title="Send Link to {{qc}}" post-repeat-directive>
+            <span class="initial">{{p.name[0] | uppercase}}</span>
+            <img ng-hide="p.picture === null" data-img-src="{{p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
+            </span>
+        </div>
     </div>
     <div id="tab" class="vertical-center" ng-controller="tab-controller">
         <span id="tab-favicon">
@@ -39,32 +39,32 @@
         <span id="tab-url">{{tab.url}}</span>
     </div>
     <div id="links">
-        <!--<div id="search">
-            <span><i class="fa fa-search"></i> </span> <input ng-model="searchstr" type="text" placeholder=". . ." />
-        </div>-->
         <div id="links-tab">
-            <span ng-repeat="header in tabHeaders track by $index" class="links-tab-header" ng-class="{'selected' : $index == selectedTabIndex}" ng-click="showTab($index)">{{header.name}} <sup style="color:black">({{header.obj.length}})</sup></span>
-
-            <span class="search-btn" ng-hide="openSearch" ng-click="openSearch=true"><i class="fa fa-search"></i></span>
-            <input type="text" placeholder=". . ." class='search-input' focus-on="openSearch" ng-show="openSearch" ng-model="searchstr" ng-blur="openSearch=false;searchstr=''" />
+            <span ng-repeat="header in tabHeaders track by $index" class="links-tab-header" ng-class="{'selected' : $index == selectedTabIndex}" ng-click="showTab($index)"><!--<span class="header-icon"><i class="{{header.iconClass}}"></i></span> -->{{header.name}} <sup class="header-count">({{header.obj.length}})</sup></span>
+            
+            <span class="add-contact fa-btn" title="Add Contact (Refresh Contact after adding)" ng-click="addContact()" ng-show="!openSearch && selectedTabIndex === 2"><i class="fa fa-plus"></i></span>
+            <span class="refresh-contact fa-btn" title="Refresh Contacts" ng-click="refreshContact()" ng-show="!openSearch && selectedTabIndex === 2"><i class="fa fa-address-card"></i> <small><i class="fa fa-refresh"></i></small></span>
+            <span class="search-btn fa-btn" title="Search Received, Sent, Contacts" ng-hide="openSearch" ng-click="openSearch=true"><i class="fa fa-search"></i></span>
+            <input type="text" placeholder="Search. . ." class='search-input' focus-on="openSearch" ng-show="openSearch" ng-model="searchstr" ng-blur="openSearch=false;searchstr=''" />
         </div>
         <div id="links-wrapper">
             <div class="lw lw-received" ng-show="selectedTabIndex === 0">
-                <div class="list-item-div" ng-repeat="f in from | searchLink: searchstr | orderBy: 'timestamp':true" ng-class="{'open-comments': f.openComments}" ng-init="p = getProfile(f.from); l = links[f.linkKey]" post-repeat-directive>
+                <div class="list-item-div" ng-repeat="f in from | searchLink: searchstr | orderBy: 'timestamp':true track by f.linkKey" ng-class="{'open-comments': f.openComments}" ng-init="p = getProfile(f.from); l = links[f.linkKey]" post-repeat-directive>
                     <div class="vertical-center list-item-div-content">
-                        <span class="link-simg-wrapper">
+                        <span class="link-simg-wrapper" title="{{p.name}}" ng-click="clickedProfilePicture(p)">
                         <span class="initial">{{p.name[0] | uppercase}}</span>
                         <img ng-hide="p.picture === null" data-img-src="{{ p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
                         </span>
 
                         <div class="link-details" ng-click="clickedLinkFrom(f)">
-                            <p class="link-title">{{l.title}}</p>
+                            <p class="link-title vertical-center"><img class="favicon" ng-src="{{l.favicon}}" /> {{l.title}}</p>
                             <p class="link-url"><small>{{l.url}}</small></p>
                         </div>
 
                         <div class="link-actions">
                             <span class="seen" ng-class="{'enable': l.opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
                             <span class="comment" title="Comment" ng-click="openComments(f)" ng-class="{'enable':f.openComments}"><i class="fa fa-comments"></i></span>
+                            <small><sup class="comment-count">{{ getObjectLength(l.comments) }}</sup></small>
                             <span class="delete" title="Delete"><i class="fa fa-trash-o" ng-click="deleteFrom(f)"></i></span>
                         </div>
                     </div>
@@ -74,15 +74,6 @@
                                 <p class="comment-email">johev09@gmail.com</p>
                                 <p class="comment-line">This is cool!</p>
                             </li>-->
-                            <li class="comment-wrapper" ng-repeat="c in l.comments | orderObjectBy: 'timestamp'">
-                                <div class="comment-content">
-                                    <p class="comment-email">{{getProfile(c.commenter).name}}</p>
-                                    <p class="comment-line">{{c.comment}}</p>
-                                </div>
-                                <div class="comment-actions vertical-center">
-                                    <span class="delete" title="Delete"><i class="fa fa-trash-o" ng-click="deleteComment(f.linkKey, c.key)"></i></span>
-                                </div>
-                            </li>
                             <li class="comment-wrapper">
                                 <form ng-submit="addComment(f.linkKey)">
                                     <p class="comment-email">{{profile.name}}</p>
@@ -91,21 +82,30 @@
                                     </p>
                                 </form>
                             </li>
+                            <li class="comment-wrapper" ng-repeat="c in l.comments | orderObjectBy: 'timestamp':true">
+                                <div class="comment-content">
+                                    <p class="comment-email">{{getProfile(c.commenter).name}}</p>
+                                    <p class="comment-line">{{c.comment}}</p>
+                                </div>
+                                <div class="comment-actions vertical-center">
+                                    <span class="delete" title="Delete" ng-show="c.commenter === profile.email"><i class="fa fa-trash-o" ng-click="deleteComment(f.linkKey, c.key)"></i></span>
+                                </div>
+                            </li>
+
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="lw lw-sent" ng-click="showSent()" ng-show="selectedTabIndex === 1">
-
-                <div class="list-item-div" ng-repeat="t in to | searchLink: searchstr | orderBy: 'timestamp':true" ng-init="p = getProfile(t.to); l = links[t.linkKey]" ng-class="{'open-comments': t.openComments}" post-repeat-directive>
+                <div class="list-item-div" ng-repeat="t in to | searchLink: searchstr | orderBy: 'timestamp':true track by t.linkKey" ng-init="p = getProfile(t.to); l = links[t.linkKey]" ng-class="{'open-comments': t.openComments}" post-repeat-directive>
                     <div class="vertical-center list-item-div-content">
-                        <span class="link-simg-wrapper">
+                        <span class="link-simg-wrapper" title="{{p.name}}" ng-click="clickedProfilePicture(p)">
                         <span class="initial">{{p.name[0] | uppercase}}</span>
                         <img ng-hide="p.picture === null" data-img-src="{{ p.picture | accessToken }}" data-img-loaded="false" class="link-simg batched-image-loader">
                         </span>
 
                         <div class="link-details" ng-click="clickedLinkTo(t)">
-                            <p class="link-title">{{l.title}}</p>
+                            <p class="link-title vertical-center"><img class="favicon" ng-src="{{l.favicon}}" /> {{l.title}}</p>
                             <p class="link-url"><small>{{l.url}}</small></p>
                         </div>
 
@@ -113,6 +113,7 @@
                             <span class="received" ng-class="{'enable': l.received}" title="Link Received"><i class="fa fa-check"></i></span>
                             <span class="seen" ng-class="{'enable': l.opened}" title="Link Opened"><i class="fa fa-eye"></i></span>
                             <span class="comment" title="Comment" ng-click="openComments(t)" ng-class="{'enable':t.openComments}"><i class="fa fa-comments"></i></span>
+                            <small><sup class="comment-count">{{ getObjectLength(l.comments) }}</sup></small>
                             <span class="delete" title="Delete Link"><i class="fa fa-trash-o" ng-click="deleteTo(t)"></i></span>
                         </div>
                     </div>
@@ -122,15 +123,6 @@
                                 <p class="comment-email">johev09@gmail.com</p>
                                 <p class="comment-line">This is cool!</p>
                             </li>-->
-                            <li class="comment-wrapper" ng-repeat="c in l.comments | orderObjectBy: 'timestamp'">
-                                <div class="comment-content">
-                                    <p class="comment-email">{{getProfile(c.commenter).name}}</p>
-                                    <p class="comment-line">{{c.comment}}</p>
-                                </div>
-                                <div class="comment-actions vertical-center">
-                                    <span class="delete" title="Delete"><i class="fa fa-trash-o" ng-click="deleteComment(t.linkKey, c.key)"></i></span>
-                                </div>
-                            </li>
                             <li class="comment-wrapper">
                                 <form ng-submit="addComment(t.linkKey)">
                                     <p class="comment-email">{{profile.name}}</p>
@@ -138,6 +130,15 @@
                                         <input type="text" focus-on='t.openComments' ng-model='comment[t.linkKey]' placeholder=". . ." />
                                     </p>
                                 </form>
+                            </li>
+                            <li class="comment-wrapper" ng-repeat="c in l.comments | orderObjectBy: 'timestamp':true">
+                                <div class="comment-content">
+                                    <p class="comment-email">{{getProfile(c.commenter).name}}</p>
+                                    <p class="comment-line">{{c.comment}}</p>
+                                </div>
+                                <div class="comment-actions vertical-center">
+                                    <span class="delete" title="Delete" ng-show="c.commenter === profile.email"><i class="fa fa-trash-o" ng-click="deleteComment(t.linkKey, c.key)"></i></span>
+                                </div>
                             </li>
                         </ul>
                     </div>
@@ -173,7 +174,6 @@
     <script src="js/jquery.batchedimageloader.js"></script>
 
     <script src="https://www.gstatic.com/firebasejs/4.1.3/firebase.js"></script>
-    <script src="popup.js"></script>
 
     <script src="js/angular.min.js"></script>
     <script src="js/app.js"></script>

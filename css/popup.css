@@ -4,7 +4,7 @@
     font-family: 'Montserrat';
     font-style: normal;
     font-weight: 400;
-    src: local('Montserrat-Regular'), url("./fonts/Montserrat400.woff2") format('woff2');
+    src: local('Montserrat-Regular'), url("./../fonts/Montserrat400.woff2") format('woff2');
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
 }
 
@@ -15,7 +15,7 @@
     font-family: 'Montserrat';
     font-style: normal;
     font-weight: 700;
-    src: local('Montserrat-Bold'), url("./fonts/Montserrat700.woff2") format('woff2');
+    src: local('Montserrat-Bold'), url("./../fonts/Montserrat700.woff2") format('woff2');
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
 }
 
@@ -25,7 +25,7 @@ body {
     color: #565656;
     font-size: 12pt;
     width: 550px;
-    padding-top: 10px;
+    /*    padding-top: 10px;*/
 }
 
 a,
@@ -145,10 +145,10 @@ a:link {
 
 .links-tab-header {
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 11pt;
     box-sizing: border-box;
     /*    border-bottom: 2px solid gray;*/
-    padding: 5px 10px;
+    padding: 5px 15px;
     transition: 0.2s;
     border-bottom: 4px solid transparent;
 }
@@ -161,13 +161,26 @@ a:link {
     border-bottom: 4px solid yellowgreen;
 }
 
-.search-btn {
+.header-icon {
+    padding: 0 5px;
+    color: yellowgreen;
+    font-size: 14pt;
+}
+
+.comment-count,
+.header-count {
+    color: lightslategray;
+}
+
+.fa-btn {
     padding: 5px;
+    margin: 0 5px;
     cursor: pointer;
     color: gainsboro;
     font-size: 14pt;
 }
-.search-btn:hover {
+
+.fa-btn:hover {
     color: yellowgreen;
 }
 
@@ -236,6 +249,7 @@ a:link {
     box-sizing: border-box;
     background-color: yellowgreen;
     color: white;
+    cursor: pointer;
 }
 
 .link-simg-wrapper,
@@ -264,13 +278,13 @@ a:link {
 
 .link-sender,
 .link-url {
-    height: 30px;
+    /*height: 30px;
     line-height: 30px;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
     font-size: 0.9em;
-    font-weight: 400;
+    font-weight: 400;*/
     /*    padding: 5px;*/
 }
 
@@ -393,7 +407,7 @@ button i {
 }
 
 .profile {
-    /*    padding-top: 5px;*/
+    padding-top: 5px;
     padding-bottom: 15px;
     /*    margin-bottom: 15px;*/
     display: flex;
@@ -428,15 +442,15 @@ button i {
 #email-form {
     overflow: hidden;
     box-sizing: border-box;
-    /*    width: 550px;*/
     width: 100%;
-    padding: 5px 10px;
-    display: inline-block;
+    padding: 0 10px;
+    display: flex;
+    margin-top: 10px;
 }
 
 #email-form form {
-    width: 100%;
     display: flex;
+    flex: 1;
 }
 
 #email-form form input[type="text"] {
@@ -451,6 +465,7 @@ button i {
     /*    border-bottom: 2px solid yellowgreen;*/
     outline: none;
     text-align: left;
+    background: transparent;
 }
 
 #email-form form.before:before {
@@ -533,16 +548,27 @@ button i {
     margin: 0;
     padding: 0;
     text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .link-title,
 .contact-name {
-    margin-bottom: 3px !important;
+    margin-bottom: 10px !important;
+    justify-content: flex-start;
+}
+
+.favicon {
+    width: 16px;
+    height: 16px;
+    padding-right: 5px;
 }
 
 .link-url,
 .contact-email {
     color: dodgerblue;
+    font-size: 9pt;
 }
 
 
@@ -556,7 +582,7 @@ button i {
     border-radius: 4px;
     overflow: hidden;
     border: 2px solid yellowgreen;
-    color: black;
+    color: darkslategray;
     align-items: stretch;
 }
 
@@ -660,18 +686,19 @@ button i {
 }
 
 .quick-contact {
-    margin: 0 10px;
+    margin: 0px 5px;
     cursor: pointer;
-    transition: transform 0.2s;
     transform: scale(1);
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.2s;
 }
 
 .quick-contact:hover {
-    transform: scale(1.1);
+    opacity: 1;
 }
 
 .quick-contact:active {
-    transform: scale(1.1) rotateZ(90deg);
+    transform: scale(0.8);
 }
 
 
@@ -746,7 +773,7 @@ button i {
     outline: none;
     font-family: Montserrat;
     color: inherit;
-    /*    padding: 5px;*/
+        padding: 5px;
     /*    border-bottom: 2px solid dodgerblue;*/
 }
 
@@ -760,15 +787,15 @@ button i {
 *::-webkit-scrollbar-button {
     display: none;
 }
- 
+
 *::-webkit-scrollbar-track {
-/*    -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3);*/
+    /*    -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3);*/
     background: transparent;
 }
- 
+
 *::-webkit-scrollbar-thumb {
-  background-color: lavender;
+    background-color: lavender;
     border-radius: 3px;
-/*  outline: 1px solid slategrey;*/
+    /*  outline: 1px solid slategrey;*/
     outline: none;
 }
